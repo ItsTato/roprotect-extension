@@ -7,8 +7,10 @@
 	import FirstDetectionModal from '@/components/features/profile/FirstDetectionModal.svelte';
 	import RestrictionNoticeModal from '@/components/features/report/RestrictionNoticeModal.svelte';
 	import ReviewPromptModal from '@/components/features/review-prompt/ReviewPromptModal.svelte';
+	import RaywardNoticeModal from '@/components/features/rayward/RaywardNoticeModal.svelte';
 	import Toast from '@/components/ui/Toast.svelte';
 	import { shouldShowChangelogModal } from '@/lib/stores/changelog';
+	import { shouldShowRaywardNotice } from '@/lib/stores/rayward-notice';
 	import { shouldShowLegalModal, triggerLegalReview } from '@/lib/stores/legal';
 	import { shouldShowFirstDetection } from '@/lib/stores/first-detection';
 	import { shouldShowRestrictionNotice } from '@/lib/stores/restricted-access';
@@ -21,6 +23,7 @@
 	import { getStorage, removeStorage } from '@/lib/utils/storage';
 
 	const showChangelog = get(shouldShowChangelogModal);
+	const showRaywardNotice = get(shouldShowRaywardNotice);
 
 	async function checkPopupRequests() {
 		const [replayRequested, legalRequested] = await Promise.all([
@@ -55,6 +58,10 @@
 
 {#if showChangelog}
 	<ChangelogModal onClose={() => logger.debug('Changelog modal closed')} />
+{/if}
+
+{#if showRaywardNotice}
+	<RaywardNoticeModal />
 {/if}
 
 {#if $shouldShowRestrictionNotice}

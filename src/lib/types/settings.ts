@@ -34,7 +34,8 @@ export const SETTINGS_KEYS = {
 	LEGAL_ACCEPTED_VERSION: 'legalAcceptedVersion',
 	LEGAL_DECLINED: 'legalDeclined',
 	FIRST_DETECTION_SEEN: 'firstDetectionSeen',
-	RESTRICTION_NOTICE_SEEN_TIMESTAMP: 'restrictionNoticeSeenTimestamp'
+	RESTRICTION_NOTICE_SEEN_TIMESTAMP: 'restrictionNoticeSeenTimestamp',
+	RAYWARD_NOTICE_SEEN: 'raywardNoticeSeen'
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
@@ -86,6 +87,7 @@ export interface Settings {
 	[SETTINGS_KEYS.LEGAL_DECLINED]: boolean;
 	[SETTINGS_KEYS.FIRST_DETECTION_SEEN]: boolean;
 	[SETTINGS_KEYS.RESTRICTION_NOTICE_SEEN_TIMESTAMP]: number;
+	[SETTINGS_KEYS.RAYWARD_NOTICE_SEEN]: boolean;
 }
 
 export const SETTINGS_DEFAULTS: Settings = {
@@ -117,7 +119,8 @@ export const SETTINGS_DEFAULTS: Settings = {
 	[SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION]: '',
 	[SETTINGS_KEYS.LEGAL_DECLINED]: false,
 	[SETTINGS_KEYS.FIRST_DETECTION_SEEN]: false,
-	[SETTINGS_KEYS.RESTRICTION_NOTICE_SEEN_TIMESTAMP]: 0
+	[SETTINGS_KEYS.RESTRICTION_NOTICE_SEEN_TIMESTAMP]: 0,
+	[SETTINGS_KEYS.RAYWARD_NOTICE_SEEN]: false
 };
 
 interface SettingCategory {

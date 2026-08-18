@@ -29,6 +29,10 @@ export const ENTITY_TYPES = {
 
 export const KOFI_URL = 'https://ko-fi.com/rotector';
 
+export const RAYWARD_URL = 'https://rayward.app';
+
+export const RAYWARD_ANNOUNCEMENT_URL = 'https://rotector.com/blog/extension-is-becoming-rayward';
+
 export const CHROME_STORE_REVIEW_URL =
 	'https://chromewebstore.google.com/detail/rotector-roblox-safety-wa/ilegibonffbmecfchpcmcmknocboagan/reviews';
 export const FIREFOX_STORE_REVIEW_URL =
