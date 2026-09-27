@@ -71,6 +71,13 @@
 	color: var(--color-text-subtle);
 }
 
+/* Overlaps the severity chips rather than being one, so offset it to read as
+   "also caught by an integration" instead of as an extra status type */
+@utility rotector-scan-chip-integration {
+	@apply border-l pl-2;
+	border-left-color: var(--color-border-subtle);
+}
+
 /* =================================
    ERROR STATE
    ================================= */

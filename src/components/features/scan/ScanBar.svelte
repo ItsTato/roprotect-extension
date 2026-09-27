@@ -77,6 +77,11 @@
 
 	const CATEGORY_ORDER = Object.keys(CATEGORIES) as ScanCategory[];
 
+	// 'integration' overlaps the severity buckets (a friend can be both Unsafe and an
+	// integration detection), so it is reported on its own chip and kept out of the totals that
+	// drive the bar segments
+	const SEVERITY_ORDER = CATEGORY_ORDER.filter((key) => key !== 'integration');
+
 	let { scan, label }: Props = $props();
 
 	let phase = $state<'scanning' | 'complete' | 'error'>('scanning');
@@ -84,7 +89,10 @@
 	let counts = new SvelteMap<ScanCategory, number>();
 	const scanBatch = createAbortableBatch();
 
-	const totalCount = $derived.by(() => [...counts.values()].reduce((s, n) => s + n, 0));
+	const totalCount = $derived.by(() =>
+		SEVERITY_ORDER.reduce((sum, key) => sum + (counts.get(key) ?? 0), 0)
+	);
+	const integrationCount = $derived(counts.get('integration') ?? 0);
 
 	$effect(() => {
 		void startScan();
@@ -133,13 +141,13 @@
 {:else if phase === 'complete'}
 	<span class="rotector-scan-results">
 		<img alt="" height="14" src={getAssetUrl('/icon/16.png')} width="14" />
-		{#if totalCount === 0}
+		{#if totalCount === 0 && integrationCount === 0}
 			<span class="rotector-scan-chip rotector-scan-chip-empty">
 				{$_('scan_complete_empty')}
 			</span>
 		{:else}
 			<span class="rotector-scan-bar">
-				{#each CATEGORY_ORDER as key (key)}
+				{#each SEVERITY_ORDER as key (key)}
 					{@const count = counts.get(key) ?? 0}
 					{#if count > 0}
 						<span
@@ -151,7 +159,7 @@
 				{/each}
 			</span>
 			<span class="rotector-scan-chips" aria-label={$_('scan_summary_aria')} role="group">
-				{#each CATEGORY_ORDER as key (key)}
+				{#each SEVERITY_ORDER as key (key)}
 					{@const count = counts.get(key) ?? 0}
 					{#if count > 0}
 						<span
@@ -172,6 +180,24 @@
 						</span>
 					{/if}
 				{/each}
+				{#if integrationCount > 0}
+					<span
+						style:color={CATEGORIES.integration.color}
+						class="rotector-scan-chip rotector-scan-chip-integration"
+						aria-label={$_('scan_chip_aria', {
+							values: { count: integrationCount, label: $_('tooltip_status_integration') }
+						})}
+						title={$_('tooltip_status_integration')}
+					>
+						<StatusIcon
+							name={CATEGORIES.integration.icon}
+							color={CATEGORIES.integration.color}
+							size={13}
+							strokeWidth={2.5}
+						/>
+						{integrationCount}
+					</span>
+				{/if}
 			</span>
 		{/if}
 	</span>

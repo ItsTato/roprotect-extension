@@ -11,6 +11,15 @@ const ACTIONABLE_FLAG_TYPES = new Set<number>([
 	STATUS.FLAGS.REDACTED
 ]);
 
+// Same actionable set ordered most severe first, so a user flagged by several custom APIs is
+// bucketed by its worst verdict rather than by whichever API happened to answer first
+const ACTIONABLE_FLAG_SEVERITY: readonly number[] = [
+	STATUS.FLAGS.UNSAFE,
+	STATUS.FLAGS.REDACTED,
+	STATUS.FLAGS.MIXED,
+	STATUS.FLAGS.PENDING
+];
+
 export const FIRST_DETECTION_FLAG_TYPES = new Set<number>([
 	STATUS.FLAGS.UNSAFE,
 	STATUS.FLAGS.PENDING,
@@ -166,4 +175,27 @@ export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
 	}
 
 	return firstWithData;
+}
+
+// The most severe actionable flagType any custom API reported, or null when none flagged.
+// Ignores SAFE and non-actionable verdicts so callers can treat null as "no integration signal".
+export function pickHighestSeverityCustomFlag<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null
+): number | null {
+	if (!combined) return null;
+
+	let worst: number | null = null;
+	let worstRank = ACTIONABLE_FLAG_SEVERITY.length;
+
+	for (const [apiId, result] of combined.entries()) {
+		if (apiId === ROTECTOR_API_ID || !result.data) continue;
+		const rank = ACTIONABLE_FLAG_SEVERITY.indexOf(result.data.flagType);
+		if (rank === -1) continue;
+		if (rank < worstRank) {
+			worstRank = rank;
+			worst = result.data.flagType;
+		}
+	}
+
+	return worst;
 }

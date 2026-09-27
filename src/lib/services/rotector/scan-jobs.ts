@@ -1,12 +1,15 @@
 import { fetchAllFriendIds } from '../roblox/friends';
 import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
-import { countCustomApiFlags, queryMultipleUsers } from './unified-query';
+import { queryMultipleUsers } from './unified-query';
 import { ROTECTOR_API_ID } from '../../stores/custom-apis';
 import type { UserStatus } from '../../types/api';
 import type { CombinedStatus } from '../../types/custom-api';
 import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
-import { calculateStatusBadges } from '../../utils/status/status-utils';
+import {
+	calculateStatusBadges,
+	pickHighestSeverityCustomFlag
+} from '../../utils/status/status-utils';
 
 const SCAN_PHASE_CHECK_START = 30;
 const SCAN_PHASE_CHECK_RANGE = 70;
@@ -58,22 +61,41 @@ function flagToCategory(flagType: number): ScanCategory {
 	}
 }
 
-// Picks one bucket per friend, applying outfit/queued overrides and promoting Rotector-safe friends to 'integration' when a custom API flagged them
-function combinedResultToCategory(combined: CombinedStatus<UserStatus>): ScanCategory | null {
+// One bucket per friend, plus whether a custom API was among the sources that flagged them
+interface ScanBucket {
+	category: ScanCategory | null;
+	fromIntegration: boolean;
+}
+
+// Picks one bucket per friend, applying outfit/queued overrides. Custom APIs are bucketed by the
+// severity they actually reported instead of a single catch-all, but a non-flagged Rotector
+// verdict never masks a partner's detection.
+function combinedResultToCategory(combined: CombinedStatus<UserStatus>): ScanBucket {
 	const data = combined.get(ROTECTOR_API_ID)?.data;
-	const customFlags = countCustomApiFlags(combined);
+	const customFlagType = pickHighestSeverityCustomFlag(combined);
+	const customCategory = customFlagType === null ? null : flagToCategory(customFlagType);
+	const fromIntegration = customCategory !== null;
 
 	// Rotector unreachable: still surface custom-API detections rather than dropping the entity,
 	// which would both hide the only available signal and shrink the scan total.
-	if (!data) return customFlags > 0 ? 'integration' : null;
+	if (!data) {
+		return { category: customCategory, fromIntegration };
+	}
 
-	if (calculateStatusBadges(data).isOutfitOnly) return 'outfit';
+	if (calculateStatusBadges(data).isOutfitOnly && customCategory === null) {
+		return { category: 'outfit', fromIntegration };
+	}
 
 	const isProcessedQueue = data.flagType === STATUS.FLAGS.QUEUED && data.processed === true;
 	const category = isProcessedQueue ? 'safe' : flagToCategory(data.flagType);
 
-	if (category === 'safe' && customFlags > 0) return 'integration';
-	return category;
+	// 'safe' and 'outfit' are both non-flagged verdicts, so a partner's detection outranks them
+	// and inherits the severity it reported
+	if (customCategory !== null && (category === 'safe' || category === 'outfit')) {
+		return { category: customCategory, fromIntegration };
+	}
+
+	return { category, fromIntegration };
 }
 
 function increment(counts: ScanCounts, category: ScanCategory): void {
@@ -118,8 +140,10 @@ export async function scanFriendsForUser(
 	);
 
 	for (const combined of results.values()) {
-		const category = combinedResultToCategory(combined);
+		const { category, fromIntegration } = combinedResultToCategory(combined);
 		if (category) increment(counts, category);
+		// Overlaps the severity buckets above, so the scan bar keeps it out of its total
+		if (fromIntegration) increment(counts, 'integration');
 	}
 
 	return counts;

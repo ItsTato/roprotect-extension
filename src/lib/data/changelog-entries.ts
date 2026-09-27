@@ -42,7 +42,7 @@ export const CHANGELOGS: Changelog[] = [
 			{
 				type: 'added',
 				description:
-					'Integration scan bar chip - Friends scan bar adds a teal chip for Not Flagged friends caught by an enabled integration API'
+					'Integration scan severities - Friends caught by an enabled integration API are now counted under the severity that API reported, with a teal chip showing how many detections came from integrations'
 			},
 			{
 				type: 'added',
