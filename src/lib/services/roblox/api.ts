@@ -4,6 +4,7 @@ import type {
 	CurrentAvatarInfo
 } from '../../types/api';
 import { ROBLOX_API } from '../../types/constants';
+import { buildHttpError } from '../../utils/api/api-error';
 import { logger } from '../../utils/logging/logger';
 import {
 	parseRobloxAvatarThumbnail,
@@ -19,8 +20,33 @@ const PICKER_ITEMS_OTHER_PAGES = 9;
 
 export const VIEWER_ITEMS_PER_PAGE = 9;
 
+// avatar.roblox.com throttles /v2/avatar/users/{id}/outfits aggressively, so page requests are
+// serialised and spaced instead of fired back-to-back. A user with a large wardrobe pages
+// through every outfit, which otherwise trips a 429 partway through and loses the whole load.
+const OUTFIT_PAGE_MIN_INTERVAL = 400;
+
+let lastOutfitPageRequestAt = 0;
+let outfitPageChain: Promise<unknown> = Promise.resolve();
+
 const pageCache = new Map<string, PaginatedOutfitsResult>();
 const pendingRequests = new Map<string, Promise<PaginatedOutfitsResult>>();
+
+// Runs `task` after every previously queued outfit page request has settled, waiting out the
+// remainder of the minimum interval first
+async function paceOutfitPageRequest<T>(task: () => Promise<T>): Promise<T> {
+	const result = outfitPageChain.then(async () => {
+		const elapsed = Date.now() - lastOutfitPageRequestAt;
+		if (elapsed < OUTFIT_PAGE_MIN_INTERVAL) {
+			await new Promise((resolve) => setTimeout(resolve, OUTFIT_PAGE_MIN_INTERVAL - elapsed));
+		}
+		lastOutfitPageRequestAt = Date.now();
+		return task();
+	});
+
+	// Keep the chain alive across rejections so one 429 does not stall later pages
+	outfitPageChain = result.catch(() => {});
+	return result;
+}
 
 // Returns a page of outfits using cached cursor chains and dedupes concurrent fetches per page
 export async function getUserOutfits(
@@ -54,7 +80,9 @@ export async function getUserOutfits(
 		}
 	}
 
-	const promise = fetchOutfitsWithThumbnails(userId, page, cursor, itemsPerPage);
+	const promise = paceOutfitPageRequest(() =>
+		fetchOutfitsWithThumbnails(userId, page, cursor, itemsPerPage)
+	);
 	pendingRequests.set(cacheKey, promise);
 
 	try {
@@ -92,7 +120,11 @@ async function fetchOutfitsWithThumbnails(
 				nextCursor: null
 			};
 		}
-		throw new Error(`Failed to fetch outfits: ${String(outfitsResponse.status)}`);
+		// Reuse the shared error shape so callers can branch on .status and the Retry-After
+		// derived .rateLimitReset rather than pattern-matching the message text for a 429
+		const httpError = await buildHttpError(outfitsResponse);
+		httpError.message = `Failed to fetch outfits: ${String(outfitsResponse.status)}`;
+		throw httpError;
 	}
 
 	const outfitsData = parseRobloxOutfitsResponse(await outfitsResponse.json());

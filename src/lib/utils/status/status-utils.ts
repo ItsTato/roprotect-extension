@@ -148,3 +148,22 @@ export function getFlaggingResult<T extends UserStatus | GroupStatus>(
 
 	return undefined;
 }
+
+// The custom API verdict to render when Rotector has nothing usable (unreachable or still
+// pending). An actionable flag always wins so a partner detection is never downgraded to a
+// SAFE-looking icon just because another provider answered first.
+export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null
+): CustomApiResult<T> | undefined {
+	if (!combined) return undefined;
+
+	let firstWithData: CustomApiResult<T> | undefined;
+
+	for (const [apiId, result] of combined.entries()) {
+		if (apiId === ROTECTOR_API_ID || !result.data) continue;
+		if (isActionableResult(result)) return result;
+		firstWithData ??= result;
+	}
+
+	return firstWithData;
+}

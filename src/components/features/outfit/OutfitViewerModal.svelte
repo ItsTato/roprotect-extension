@@ -7,6 +7,7 @@
 		VIEWER_ITEMS_PER_PAGE
 	} from '@/lib/services/roblox/api';
 	import { retryPendingOutfitThumbnails } from '@/lib/services/roblox/outfit-thumbnail-retry';
+	import { asApiError, type ApiError } from '@/lib/utils/api/api-error';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { CircleAlert, Shirt } from '@lucide/svelte';
 	import AppLogo from '../../ui/AppLogo.svelte';
@@ -16,6 +17,11 @@
 	import OutfitPaginator from './OutfitPaginator.svelte';
 	import type { OutfitWithThumbnail } from '@/lib/types/api';
 	import type { FlaggedOutfitInfo } from '@/lib/utils/status/violation-formatter';
+
+	// Roblox rate limits avatar.outfits without always sending Retry-After, so treat a bare
+	// 429 as a 30s wait and never trust a header that would hold the modal hostage for minutes
+	const RATE_LIMIT_FALLBACK_COOLDOWN = 30;
+	const RATE_LIMIT_MAX_COOLDOWN = 120;
 
 	interface Props {
 		userId: string;
@@ -32,6 +38,7 @@
 	let hasLoadedOnce = $state(false);
 	let selectedOutfit = $state<OutfitWithThumbnail | null>(null);
 	let loadedCount = $state(0);
+	let rateLimitSeconds = $state(0);
 
 	const flagInfoById = $derived.by(() => {
 		const lookup = new SvelteMap<string, FlaggedOutfitInfo>();
@@ -132,11 +139,33 @@
 		return () => clearTimeout(id);
 	});
 
+	// Counts the rate-limit cooldown down so the retry button re-enables itself
+	$effect(() => {
+		if (rateLimitSeconds <= 0) return;
+		const id = setInterval(() => {
+			rateLimitSeconds = Math.max(0, rateLimitSeconds - 1);
+		}, 1000);
+		return () => clearInterval(id);
+	});
+
+	// Roblox omits Retry-After on some 429s, so fall back to a conservative wait rather than
+	// letting the user hammer the endpoint again immediately
+	function resolveRateLimitSeconds(err: ApiError): number {
+		if (typeof err.rateLimitReset === 'number') {
+			const seconds = Math.ceil(err.rateLimitReset - Date.now() / 1000);
+			if (seconds > 0) return Math.min(seconds, RATE_LIMIT_MAX_COOLDOWN);
+		}
+		return RATE_LIMIT_FALLBACK_COOLDOWN;
+	}
+
 	// Pages through every outfit in sequence so subsequent grouping and pagination operates on the full set
 	async function loadAllOutfits() {
+		if (rateLimitSeconds > 0) return;
+
 		isLoading = true;
 		hasError = false;
 		loadedCount = 0;
+		rateLimitSeconds = 0;
 
 		try {
 			const collected: OutfitWithThumbnail[] = [];
@@ -158,7 +187,15 @@
 		} catch (error) {
 			hasError = true;
 			hasLoadedOnce = true;
-			logger.error('Failed to load outfits:', error);
+			const err = asApiError(error);
+			if (err.status === 429) {
+				rateLimitSeconds = resolveRateLimitSeconds(err);
+				logger.warn('Outfit load rate limited by Roblox', {
+					retryAfterSeconds: rateLimitSeconds
+				});
+			} else {
+				logger.error('Failed to load outfits:', error);
+			}
 		} finally {
 			isLoading = false;
 		}
@@ -197,8 +234,20 @@
 			{:else if hasError}
 				<div class="outfit-viewer-error">
 					<CircleAlert size={20} />
-					<span>{$_('outfit_viewer_error')}</span>
-					<button class="outfit-viewer-retry" onclick={loadAllOutfits} type="button">
+					{#if rateLimitSeconds > 0}
+						<span>{$_('outfit_viewer_error_rate_limited')}</span>
+						<span class="outfit-viewer-error-cooldown">
+							{$_('outfit_viewer_cooldown', { values: { 0: rateLimitSeconds.toString() } })}
+						</span>
+					{:else}
+						<span>{$_('outfit_viewer_error')}</span>
+					{/if}
+					<button
+						class="outfit-viewer-retry"
+						disabled={rateLimitSeconds > 0}
+						onclick={loadAllOutfits}
+						type="button"
+					>
 						{$_('outfit_viewer_retry')}
 					</button>
 				</div>

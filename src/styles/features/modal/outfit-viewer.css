@@ -178,6 +178,11 @@
 	color: var(--color-error);
 }
 
+@utility outfit-viewer-error-cooldown {
+	@apply text-xs;
+	color: var(--color-text-subtle);
+}
+
 @utility outfit-viewer-retry {
 	@apply cursor-pointer rounded-sm px-3 py-1.5 text-xs font-medium;
 	background-color: var(--color-bg-tertiary);
@@ -190,6 +195,17 @@
 	&:hover {
 		background-color: var(--color-bg-secondary);
 		border-color: var(--color-border);
+	}
+
+	/* Rate limited: the retry is withheld until the countdown reaches zero */
+	&:disabled {
+		@apply cursor-not-allowed;
+		opacity: 0.5;
+	}
+
+	&:disabled:hover {
+		background-color: var(--color-bg-tertiary);
+		border-color: var(--color-border-subtle);
 	}
 }
 

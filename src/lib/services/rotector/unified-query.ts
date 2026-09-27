@@ -315,16 +315,18 @@ export function pickDefaultTab<T extends UserStatus | GroupStatus>(
 	if (!allSettled) return null;
 
 	const rotector = combined.get(ROTECTOR_API_ID);
-	const allApisSafe = values.every(
-		(result) => !result.data || result.data.flagType === STATUS.FLAGS.SAFE
+	const firstCustomWithDetection = [...combined.entries()].find(
+		([id, result]) =>
+			id !== ROTECTOR_API_ID && result.data && result.data.flagType !== STATUS.FLAGS.SAFE
 	);
 
-	if (rotector?.data?.flagType === STATUS.FLAGS.SAFE && combined.size > 1 && !allApisSafe) {
-		const firstCustomWithDetection = [...combined.entries()].find(
-			([id, result]) =>
-				id !== ROTECTOR_API_ID && result.data && result.data.flagType !== STATUS.FLAGS.SAFE
-		);
-		if (firstCustomWithDetection) return firstCustomWithDetection[0];
+	// Prefer a custom API that flagged the entity whenever Rotector has nothing to show — SAFE
+	// or unreachable — so the detection is not hidden behind an empty or errored tab.
+	if (
+		firstCustomWithDetection &&
+		(!rotector?.data || rotector.data.flagType === STATUS.FLAGS.SAFE)
+	) {
+		return firstCustomWithDetection[0];
 	}
 
 	return ROTECTOR_API_ID;

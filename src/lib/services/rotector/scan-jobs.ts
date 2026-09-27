@@ -61,14 +61,18 @@ function flagToCategory(flagType: number): ScanCategory {
 // Picks one bucket per friend, applying outfit/queued overrides and promoting Rotector-safe friends to 'integration' when a custom API flagged them
 function combinedResultToCategory(combined: CombinedStatus<UserStatus>): ScanCategory | null {
 	const data = combined.get(ROTECTOR_API_ID)?.data;
-	if (!data) return null;
+	const customFlags = countCustomApiFlags(combined);
+
+	// Rotector unreachable: still surface custom-API detections rather than dropping the entity,
+	// which would both hide the only available signal and shrink the scan total.
+	if (!data) return customFlags > 0 ? 'integration' : null;
 
 	if (calculateStatusBadges(data).isOutfitOnly) return 'outfit';
 
 	const isProcessedQueue = data.flagType === STATUS.FLAGS.QUEUED && data.processed === true;
 	const category = isProcessedQueue ? 'safe' : flagToCategory(data.flagType);
 
-	if (category === 'safe' && countCustomApiFlags(combined) > 0) return 'integration';
+	if (category === 'safe' && customFlags > 0) return 'integration';
 	return category;
 }
 

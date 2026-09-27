@@ -19,6 +19,7 @@
 		getRotectorMembershipBadge,
 		getRotectorOutfitEvidence
 	} from '@/lib/utils/status/status-projection';
+	import { pickCustomApiFallback } from '@/lib/utils/status/status-utils';
 	import { Flag, Hourglass } from '@lucide/svelte';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 
@@ -94,6 +95,18 @@
 		const rotectorError = rotector?.error ?? null;
 		const effectiveError = rotectorError || error;
 
+		// An unreachable or not-yet-answered Rotector makes getStatusConfig render the generic
+		// "Unknown" indicator, hiding a verdict a custom API already returned. Prefer that
+		// provider's flagType instead so the icon, colour, and label mirror what it reported.
+		// Skipped when the caller supplied its own error so entity-level failures (restricted
+		// access) keep winning over partial third-party data.
+		if (!error && (effectiveError !== null || !rotectorStatus)) {
+			const fallback = pickCustomApiFallback(entityStatus);
+			if (fallback?.data) {
+				return getStatusConfig(fallback.data, null, false, null, entityType);
+			}
+		}
+
 		return getStatusConfig(
 			rotectorStatus,
 			cachedStatus,
@@ -132,8 +145,18 @@
 	const rotector = $derived(entityStatus?.get(ROTECTOR_API_ID));
 	const rotectorLoading = $derived(rotector?.loading ?? false);
 	const hasData = $derived(!!(rotector?.data ?? cachedStatus));
+	const anyApiHasData = $derived(
+		!!entityStatus && [...entityStatus.values()].some((result) => !!result.data)
+	);
+	const anyApiErrored = $derived(
+		!!entityStatus && [...entityStatus.values()].some((result) => !!result.error)
+	);
+	// An unreachable Rotector lookup must not hide a flag a custom API already returned, so
+	// the tooltip stays reachable as soon as any API has data or has settled with an error.
 	const tooltipBlocked = $derived(
-		rotectorLoading || (!hasData && !error && !isRestricted && !isSelfLookup)
+		!anyApiHasData &&
+			!anyApiErrored &&
+			(rotectorLoading || (!hasData && !error && !isRestricted && !isSelfLookup))
 	);
 
 	function handleClick(event: MouseEvent | KeyboardEvent) {
