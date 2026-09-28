@@ -2,7 +2,7 @@
 	"name": "rotector-extension-v2",
 	"description": "Real-time warnings about inappropriate Roblox users before you interact with them.",
 	"private": true,
-	"version": "2.17.1",
+	"version": "2.20.0",
 	"type": "module",
 	"scripts": {
 		"dev": "wxt",
@@ -14,6 +14,7 @@
 		"zip": "wxt zip",
 		"zip:firefox": "wxt zip -b firefox --mv2",
 		"zip:edge": "wxt zip -b edge",
+		"sign:firefox": "node scripts/sign-firefox.js",
 		"check": "svelte-check --tsconfig ./tsconfig.json --tsgo --incremental",
 		"lint": "oxlint && eslint . --cache && oxfmt --check",
 		"lint:fix": "oxlint --fix && eslint . --cache --fix && oxfmt",

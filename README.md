@@ -81,6 +81,34 @@ on network or WSL drives where file watching misses edits.
 - **Chrome / Edge**: `chrome://extensions/` or `edge://extensions/` → Enable "Developer mode" → "Load unpacked" → select `.output/chrome-mv3`
 - **Firefox**: `about:debugging` → "This Firefox" → "Load Temporary Add-on" → select any file in `.output/firefox-mv2`
 
+### Signing the Firefox build
+
+Release and beta Firefox only install signed add-ons, so a build destined for
+anyone other than your own profile has to be signed by Mozilla. `bun run
+sign:firefox` does this with [`web-ext`](https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-desktop/):
+
+```bash
+bun run build:firefox
+bun run sign:firefox
+```
+
+Create a key at [addons.mozilla.org API credentials](https://addons.mozilla.org/en-US/developers/addon/api/key/),
+then copy `.env.example` to `.env` at the repo root and fill in the two halves:
+
+```
+AMO_JWT_ISSUER=...
+AMO_JWT_SECRET=...
+```
+
+The signed `.xpi` lands in `web-ext-artifacts/` (gitignored) and is installable
+on any release Firefox build via `about:debugging`. Nothing is published to the
+Add-ons Marketplace: the script submits on the `unlisted` channel, which stays
+private to anyone you share the file with and is not eligible for automatic
+updates.
+
+The script reads `.output/firefox-mv2`, so run `build:firefox` first. Credentials
+are read from the environment only and are never written to the repo.
+
 ## Development
 
 ```bash

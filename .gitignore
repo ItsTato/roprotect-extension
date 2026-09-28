@@ -2,7 +2,10 @@
 .wxt
 node_modules
 web-ext.config.ts
+web-ext-artifacts
 .env
+.env.*
+!.env.example
 .eslintcache
 .stylelintcache
 .svelte-check

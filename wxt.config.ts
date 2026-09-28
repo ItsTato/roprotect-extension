@@ -66,7 +66,7 @@ export default defineConfig({
 			name: '__MSG_extensionName__',
 			description: '__MSG_extensionDescription__',
 			default_locale: 'en',
-			version: '2.17.1',
+			version: '2.20.0',
 			minimum_chrome_version: '128',
 			permissions: ['storage', 'notifications', ...robloxFetch],
 			host_permissions: [`https://${apiDomain}/*`, 'https://cdn.rotector.com/*'],
@@ -97,6 +97,13 @@ export default defineConfig({
 						strict_min_version: '129.0',
 						// See src/lib/utils/device-fingerprint.ts for what this declares and why
 						data_collection_permissions: {
+							// AMO requires both keys and rejects an empty `required`. "none" is the
+							// documented way to say nothing is collected without consent; it may
+							// not be combined with other required categories, but it can sit
+							// alongside `optional`. The device signal is only computed once the
+							// legal gate is accepted (see initializePageHandling in
+							// entrypoints/content.ts), so technicalAndInteraction stays optional.
+							required: ['none'],
 							optional: ['technicalAndInteraction']
 						}
 					}
