@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "หรือ",
 	"custom_api_import_error_empty_data": "กรุณาวางการกำหนดค่า API หรืออัปโหลดไฟล์",
 	"custom_api_import_error_file_read_failed": "ไม่สามารถอ่านไฟล์ได้ กรุณาลองอีกครั้ง",
-	"custom_api_import_error_invalid_file_extension": "ประเภทไฟล์ไม่ถูกต้อง กรุณาเลือกไฟล์ .rotector-api",
+	"custom_api_import_error_invalid_file_extension": "ประเภทไฟล์ไม่ถูกต้อง กรุณาเลือกไฟล์ .roprotect-api",
 	"custom_api_import_label_paste": "วางการกำหนดค่า API",
 	"custom_api_import_placeholder_paste": "วางสตริงการกำหนดค่า API ที่ส่งออกที่นี่...",
 	"custom_api_import_title": "นำเข้า Custom API",

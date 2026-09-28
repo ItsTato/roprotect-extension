@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Ou",
 	"custom_api_import_error_empty_data": "Por favor, cole uma configuração de API ou envie um arquivo.",
 	"custom_api_import_error_file_read_failed": "Falha ao ler arquivo. Tente novamente.",
-	"custom_api_import_error_invalid_file_extension": "Tipo de arquivo inválido. Selecione um arquivo .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "Tipo de arquivo inválido. Selecione um arquivo .roprotect-api.",
 	"custom_api_import_label_paste": "Colar Configuração de API",
 	"custom_api_import_placeholder_paste": "Cole a string de configuração de API exportada aqui...",
 	"custom_api_import_title": "Importar API Personalizada",

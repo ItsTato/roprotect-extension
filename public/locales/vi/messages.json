@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Hoặc",
 	"custom_api_import_error_empty_data": "Vui lòng dán cấu hình API hoặc tải lên tệp.",
 	"custom_api_import_error_file_read_failed": "Không thể đọc tệp. Vui lòng thử lại.",
-	"custom_api_import_error_invalid_file_extension": "Loại tệp không hợp lệ. Vui lòng chọn tệp .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "Loại tệp không hợp lệ. Vui lòng chọn tệp .roprotect-api.",
 	"custom_api_import_label_paste": "Dán cấu hình API",
 	"custom_api_import_placeholder_paste": "Dán chuỗi cấu hình API đã xuất tại đây...",
 	"custom_api_import_title": "Nhập API tùy chỉnh",

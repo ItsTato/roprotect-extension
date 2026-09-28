@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "أو",
 	"custom_api_import_error_empty_data": "يرجى لصق تكوين API أو تحميل ملف.",
 	"custom_api_import_error_file_read_failed": "فشل قراءة الملف. يرجى المحاولة مرة أخرى.",
-	"custom_api_import_error_invalid_file_extension": "نوع الملف غير صالح. يرجى تحديد ملف .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "نوع الملف غير صالح. يرجى تحديد ملف .roprotect-api.",
 	"custom_api_import_label_paste": "لصق تكوين API",
 	"custom_api_import_placeholder_paste": "الصق سلسلة تكوين API المُصدَّرة هنا...",
 	"custom_api_import_title": "استيراد API مخصص",

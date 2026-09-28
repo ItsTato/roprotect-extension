@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Atau",
 	"custom_api_import_error_empty_data": "Silakan tempelkan konfigurasi API atau unggah file.",
 	"custom_api_import_error_file_read_failed": "Gagal membaca file. Silakan coba lagi.",
-	"custom_api_import_error_invalid_file_extension": "Jenis file tidak valid. Silakan pilih file .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "Jenis file tidak valid. Silakan pilih file .roprotect-api.",
 	"custom_api_import_label_paste": "Tempelkan Konfigurasi API",
 	"custom_api_import_placeholder_paste": "Tempelkan string konfigurasi API yang diekspor di sini...",
 	"custom_api_import_title": "Impor API Kustom",

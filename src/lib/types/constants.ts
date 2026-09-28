@@ -29,6 +29,16 @@ export const ENTITY_TYPES = {
 
 export const RAYWARD_URL = 'https://rayward.app';
 
+// Custom API bundles are exported as `.roprotect-api`. The pre-rebrand
+// `.rotector-api` extension is still accepted on import so files shared before
+// the rename keep working.
+export const CUSTOM_API_FILE_EXTENSION = '.roprotect-api';
+export const CUSTOM_API_LEGACY_FILE_EXTENSIONS: readonly string[] = ['.rotector-api'];
+export const CUSTOM_API_IMPORT_EXTENSIONS: string = [
+	CUSTOM_API_FILE_EXTENSION,
+	...CUSTOM_API_LEGACY_FILE_EXTENSIONS
+].join(',');
+
 export const RAYWARD_ANNOUNCEMENT_URL =
 	'https://roprotect.tlet.xyz/blog/extension-is-becoming-rayward';
 

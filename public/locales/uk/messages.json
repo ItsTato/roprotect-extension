@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Або",
 	"custom_api_import_error_empty_data": "Будь ласка, вставте конфігурацію API або завантажте файл.",
 	"custom_api_import_error_file_read_failed": "Не вдалося прочитати файл. Спробуйте ще раз.",
-	"custom_api_import_error_invalid_file_extension": "Неправильний тип файлу. Виберіть файл .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "Неправильний тип файлу. Виберіть файл .roprotect-api.",
 	"custom_api_import_label_paste": "Вставте конфігурацію API",
 	"custom_api_import_placeholder_paste": "Вставте експортований рядок конфігурації API тут...",
 	"custom_api_import_title": "Імпортувати користувацький API",

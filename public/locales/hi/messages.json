@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "या",
 	"custom_api_import_error_empty_data": "कृपया API कॉन्फ़िगरेशन पेस्ट करें या फ़ाइल अपलोड करें।",
 	"custom_api_import_error_file_read_failed": "फ़ाइल पढ़ने में विफल। कृपया पुनः प्रयास करें।",
-	"custom_api_import_error_invalid_file_extension": "अमान्य फ़ाइल प्रकार। कृपया .rotector-api फ़ाइल चुनें।",
+	"custom_api_import_error_invalid_file_extension": "अमान्य फ़ाइल प्रकार। कृपया .roprotect-api फ़ाइल चुनें।",
 	"custom_api_import_label_paste": "API कॉन्फ़िगरेशन पेस्ट करें",
 	"custom_api_import_placeholder_paste": "निर्यात की गई API कॉन्फ़िगरेशन स्ट्रिंग यहां पेस्ट करें...",
 	"custom_api_import_title": "कस्टम API आयात करें",

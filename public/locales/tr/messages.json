@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Veya",
 	"custom_api_import_error_empty_data": "Lütfen bir API yapılandırması yapıştırın veya dosya yükleyin.",
 	"custom_api_import_error_file_read_failed": "Dosya okunamadı. Lütfen tekrar deneyin.",
-	"custom_api_import_error_invalid_file_extension": "Geçersiz dosya türü. Lütfen bir .rotector-api dosyası seçin.",
+	"custom_api_import_error_invalid_file_extension": "Geçersiz dosya türü. Lütfen bir .roprotect-api dosyası seçin.",
 	"custom_api_import_label_paste": "API Yapılandırmasını Yapıştır",
 	"custom_api_import_placeholder_paste": "Dışa aktarılan API yapılandırma dizesini buraya yapıştırın...",
 	"custom_api_import_title": "Özel API İçe Aktar",

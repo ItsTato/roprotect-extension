@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "O",
 	"custom_api_import_error_empty_data": "Mangyaring mag-paste ng API configuration o mag-upload ng file.",
 	"custom_api_import_error_file_read_failed": "Nabigo ang pagbasa ng file. Mangyaring subukan muli.",
-	"custom_api_import_error_invalid_file_extension": "Hindi wastong uri ng file. Mangyaring pumili ng .rotector-api file.",
+	"custom_api_import_error_invalid_file_extension": "Hindi wastong uri ng file. Mangyaring pumili ng .roprotect-api file.",
 	"custom_api_import_label_paste": "Mag-paste ng API Configuration",
 	"custom_api_import_placeholder_paste": "I-paste dito ang exported API configuration string...",
 	"custom_api_import_title": "I-import ang Custom API",

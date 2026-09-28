@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "或",
 	"custom_api_import_error_empty_data": "请粘贴 API 配置或上传文件。",
 	"custom_api_import_error_file_read_failed": "无法读取文件。请重试。",
-	"custom_api_import_error_invalid_file_extension": "文件类型无效。请选择 .rotector-api 文件。",
+	"custom_api_import_error_invalid_file_extension": "文件类型无效。请选择 .roprotect-api 文件。",
 	"custom_api_import_label_paste": "粘贴 API 配置",
 	"custom_api_import_placeholder_paste": "在此粘贴导出的 API 配置字符串...",
 	"custom_api_import_title": "导入自定义 API",

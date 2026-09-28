@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "または",
 	"custom_api_import_error_empty_data": "API設定を貼り付けるか、ファイルをアップロードしてください。",
 	"custom_api_import_error_file_read_failed": "ファイルの読み取りに失敗しました。もう一度お試しください。",
-	"custom_api_import_error_invalid_file_extension": "無効なファイルタイプです。.rotector-apiファイルを選択してください。",
+	"custom_api_import_error_invalid_file_extension": "無効なファイルタイプです。.roprotect-apiファイルを選択してください。",
 	"custom_api_import_label_paste": "API設定を貼り付け",
 	"custom_api_import_placeholder_paste": "エクスポートされたAPI設定文字列をここに貼り付けてください...",
 	"custom_api_import_title": "カスタムAPIをインポート",

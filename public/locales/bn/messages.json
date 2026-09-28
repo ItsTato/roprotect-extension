@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "অথবা",
 	"custom_api_import_error_empty_data": "একটি API কনফিগারেশন পেস্ট করুন বা একটি ফাইল আপলোড করুন।",
 	"custom_api_import_error_file_read_failed": "ফাইল পড়তে ব্যর্থ। আবার চেষ্টা করুন।",
-	"custom_api_import_error_invalid_file_extension": "অবৈধ ফাইল প্রকার। একটি .rotector-api ফাইল নির্বাচন করুন।",
+	"custom_api_import_error_invalid_file_extension": "অবৈধ ফাইল প্রকার। একটি .roprotect-api ফাইল নির্বাচন করুন।",
 	"custom_api_import_label_paste": "API কনফিগারেশন পেস্ট করুন",
 	"custom_api_import_placeholder_paste": "এখানে রপ্তানি করা API কনফিগারেশন স্ট্রিং পেস্ট করুন...",
 	"custom_api_import_title": "কাস্টম API আমদানি করুন",

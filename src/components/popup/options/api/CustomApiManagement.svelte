@@ -16,6 +16,7 @@
 		TriangleAlert
 	} from '@lucide/svelte';
 	import type { CustomApiConfig } from '@/lib/types/custom-api';
+	import { CUSTOM_API_FILE_EXTENSION } from '@/lib/types/constants';
 	import {
 		customApis,
 		loadCustomApis,
@@ -201,7 +202,7 @@
 	function handleExportFile(api: CustomApiConfig) {
 		try {
 			const exported = exportApi(api.id);
-			const filename = `${api.name.replaceAll(/[^a-z0-9]/gi, '-')}.rotector-api`;
+			const filename = `${api.name.replaceAll(/[^a-z0-9]/gi, '-')}${CUSTOM_API_FILE_EXTENSION}`;
 
 			const blob = new Blob([exported], { type: 'text/plain' });
 			const url = URL.createObjectURL(blob);

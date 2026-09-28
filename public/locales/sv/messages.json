@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Eller",
 	"custom_api_import_error_empty_data": "Vänligen klistra in en API-konfiguration eller ladda upp en fil.",
 	"custom_api_import_error_file_read_failed": "Misslyckades med att läsa fil. Vänligen försök igen.",
-	"custom_api_import_error_invalid_file_extension": "Ogiltig filtyp. Vänligen välj en .rotector-api fil.",
+	"custom_api_import_error_invalid_file_extension": "Ogiltig filtyp. Vänligen välj en .roprotect-api fil.",
 	"custom_api_import_label_paste": "Klistra in API-konfiguration",
 	"custom_api_import_placeholder_paste": "Klistra in den exporterade API-konfigurationssträngen här...",
 	"custom_api_import_title": "Importera anpassat API",

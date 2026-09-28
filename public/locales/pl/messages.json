@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "Lub",
 	"custom_api_import_error_empty_data": "Proszę wkleić konfigurację API lub przesłać plik.",
 	"custom_api_import_error_file_read_failed": "Nie udało się odczytać pliku. Spróbuj ponownie.",
-	"custom_api_import_error_invalid_file_extension": "Nieprawidłowy typ pliku. Proszę wybrać plik .rotector-api.",
+	"custom_api_import_error_invalid_file_extension": "Nieprawidłowy typ pliku. Proszę wybrać plik .roprotect-api.",
 	"custom_api_import_label_paste": "Wklej konfigurację API",
 	"custom_api_import_placeholder_paste": "Wklej tutaj wyeksportowany ciąg konfiguracji API...",
 	"custom_api_import_title": "Importuj niestandardowe API",

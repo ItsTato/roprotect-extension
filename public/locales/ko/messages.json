@@ -203,7 +203,7 @@
 	"custom_api_import_divider_or": "또는",
 	"custom_api_import_error_empty_data": "API 구성을 붙여넣거나 파일을 업로드하세요.",
 	"custom_api_import_error_file_read_failed": "파일을 읽지 못했습니다. 다시 시도하세요.",
-	"custom_api_import_error_invalid_file_extension": "잘못된 파일 형식입니다. .rotector-api 파일을 선택하세요.",
+	"custom_api_import_error_invalid_file_extension": "잘못된 파일 형식입니다. .roprotect-api 파일을 선택하세요.",
 	"custom_api_import_label_paste": "API 구성 붙여넣기",
 	"custom_api_import_placeholder_paste": "내보낸 API 구성 문자열을 여기에 붙여넣으세요...",
 	"custom_api_import_title": "사용자 정의 API 가져오기",
