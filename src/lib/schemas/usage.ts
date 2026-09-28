@@ -1,8 +1,12 @@
 import * as v from 'valibot';
 
+// A service the key has no access to comes back with only the counters the
+// backend actually tracked, or with no totals at all. Requiring both would
+// reject the whole response over one unavailable service, so both are optional
+// here and normalized to 0 by the endpoint.
 const UsageServiceTotalsSchema = v.object({
-	single: v.number(),
-	batch: v.number()
+	single: v.optional(v.number()),
+	batch: v.optional(v.number())
 });
 
 // `keys` is keyed by the raw API key id and can hold one entry per key on the
@@ -13,7 +17,7 @@ const UsageKeyEntrySchema = v.object({
 	totalRequests: v.number(),
 	avgLatencyMs: v.number(),
 	byOutcome: v.record(v.string(), v.number()),
-	byService: v.record(v.string(), UsageServiceTotalsSchema),
+	byService: v.record(v.string(), v.nullish(UsageServiceTotalsSchema)),
 	firstSeen: v.nullable(v.number()),
 	lastSeen: v.nullable(v.number()),
 	recentUserIds: v.array(v.union([v.string(), v.number()]))

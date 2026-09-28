@@ -80,12 +80,11 @@ export async function getApiUsage(): Promise<ApiUsage> {
 			.toSorted((a, b) => b.count - a.count);
 
 		const services = orderServices(
-			Object.entries(entry.byService).map(([service, totals]) => ({
-				service,
-				single: totals.single,
-				batch: totals.batch,
-				total: totals.single + totals.batch
-			}))
+			Object.entries(entry.byService).map(([service, totals]) => {
+				const single = totals?.single ?? 0;
+				const batch = totals?.batch ?? 0;
+				return { service, single, batch, total: single + batch };
+			})
 		);
 
 		const successCount = entry.byOutcome['ok'] ?? 0;
