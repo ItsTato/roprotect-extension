@@ -12,28 +12,36 @@ import {
 import { asApiError } from '../utils/api/api-error';
 import { testCustomApiConnection } from '../services/custom-api-test';
 import { getAssetUrl } from '../utils/assets';
+import type { PublicPath } from 'wxt/browser';
 import { getStorage, setStorage } from '../utils/storage';
 import { generateLocalId } from '../utils/id';
 import { parsePersistedCustomApis } from '../schemas/custom-api';
+import { apiClient } from '../services/rotector/api-client';
 
 export const MAX_CUSTOM_APIS = 5;
 
-export const ROTECTOR_API_ID = 'system-rotector';
+export const RO_PROTECT_API_ID = 'system-roprotect';
 
-function createRotectorApiConfig(): CustomApiConfig {
-	return {
-		id: ROTECTOR_API_ID,
-		name: 'Rotector',
-		singleUrl: `${API_CONFIG.BASE_URL}/v1/lookup/roblox/user/{userId}`,
-		batchUrl: `${API_CONFIG.BASE_URL}/v1/lookup/roblox/users`,
-		enabled: true,
-		timeout: API_CONFIG.TIMEOUT,
-		order: -1, // Always first
-		createdAt: 0,
-		isSystem: true,
-		reasonFormat: 'numeric',
-		landscapeImageDataUrl: getAssetUrl('/assets/rotector-tab.webp')
-	};
+const SERVICE_ORDER = ['scsn', 'rab', 'tase'] as const;
+const SERVICE_LABELS: Record<string, string> = {
+	scsn: 'SIGMANET',
+	rab: 'RAB',
+	tase: 'TASE'
+};
+const SERVICE_IMAGES: Record<(typeof SERVICE_ORDER)[number], string> = {
+	scsn: '/assets/sigmanet-dark.png',
+	rab: '/assets/rab.webp',
+	tase: '/assets/tase.webp'
+};
+
+interface WhoamiData {
+	services: string[];
+	endpoints: Record<string, { single: string; batch: string }>;
+	label: string;
+	fingerprint: string;
+	isAdmin: boolean;
+	rateLimitPerMinute: number;
+	limits: Record<string, number>;
 }
 
 export const customApis = writable<CustomApiConfig[]>([]);
@@ -42,9 +50,12 @@ function generateCustomApiId(): string {
 	return generateLocalId('custom-api');
 }
 
-// Loads user-configured APIs and prepends the Rotector system API
+// Loads APIs from storage, and if API key is present, loads services from whoami
 export async function loadCustomApis(): Promise<void> {
 	const stored = await getStorage<unknown>('local', SETTINGS_KEYS.CUSTOM_APIS, undefined);
+	const settings = await getStorage<Record<string, unknown>>('local', 'settings', {});
+
+	const apiKey = (settings[SETTINGS_KEYS.API_KEY] as string | undefined)?.trim();
 
 	if (stored === undefined) {
 		await setStorage('local', SETTINGS_KEYS.CUSTOM_APIS, []);
@@ -63,11 +74,46 @@ export async function loadCustomApis(): Promise<void> {
 		}
 	}
 
-	const rotectorApi = createRotectorApiConfig();
-	const allApis = [rotectorApi, ...userApis];
+	let systemApis: CustomApiConfig[] = [];
 
+	if (apiKey) {
+		try {
+			// Fetch services from whoami
+			const response = await apiClient.whoami(apiKey);
+			if (response.success && response.data) {
+				systemApis = createSystemApisFromWhoami(response.data as WhoamiData, apiKey);
+			}
+		} catch (error) {
+			logger.error('Failed to load services from whoami:', error);
+		}
+	}
+
+	const allApis = [...systemApis, ...userApis];
 	customApis.set(allApis);
-	logger.debug('Loaded APIs:', { total: allApis.length, userApis: userApis.length });
+	logger.debug('Loaded APIs:', {
+		total: allApis.length,
+		system: systemApis.length,
+		user: userApis.length
+	});
+}
+
+function createSystemApisFromWhoami(whoami: WhoamiData, apiKey: string): CustomApiConfig[] {
+	return SERVICE_ORDER.filter((id) => whoami.services.includes(id)).map((id, index) => ({
+		id: `system-${id}`,
+		name: SERVICE_LABELS[id] ?? 'Unknown',
+		singleUrl:
+			whoami.endpoints[id]?.single ?? `https://roprotect.tlet.xyz/v1/${id}/v1/lookup/user/{userId}`,
+		batchUrl: whoami.endpoints[id]?.batch ?? `https://roprotect.tlet.xyz/v1/${id}/v1/lookup/users`,
+		enabled: true,
+		timeout: API_CONFIG.TIMEOUT,
+		order: index,
+		createdAt: 0,
+		isSystem: true,
+		reasonFormat: 'numeric',
+		landscapeImageDataUrl: getAssetUrl(SERVICE_IMAGES[id] as PublicPath),
+		apiKey,
+		authHeaderType: 'x-auth-token' as const
+	}));
 }
 
 async function saveCustomApis(apis: CustomApiConfig[]): Promise<void> {
@@ -253,7 +299,6 @@ export async function reorderCustomApi(id: string, direction: 'up' | 'down'): Pr
 
 	const newIndex = direction === 'up' ? index - 1 : index + 1;
 
-	// System APIs occupy the front and user APIs cannot swap into those slots
 	const swapTarget = current[newIndex];
 	if (!swapTarget || swapTarget.isSystem) {
 		return;
@@ -276,4 +321,19 @@ export async function updateTestResult(id: string, success: boolean): Promise<vo
 		lastTested: Date.now(),
 		lastTestSuccess: success
 	});
+}
+
+export async function refreshSystemApis(apiKey: string): Promise<void> {
+	try {
+		const response = await apiClient.whoami(apiKey);
+		if (response.success && response.data) {
+			const systemApis = createSystemApisFromWhoami(response.data as WhoamiData, apiKey);
+			const current = get(customApis);
+			const userApis = current.filter((api) => !api.isSystem);
+			customApis.set([...systemApis, ...userApis]);
+			logger.debug('Refreshed system APIs from whoami', { count: systemApis.length });
+		}
+	} catch (error) {
+		logger.error('Failed to refresh system APIs:', error);
+	}
 }

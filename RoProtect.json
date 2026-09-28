@@ -1,0 +1,1873 @@
+{
+	"components": {
+		"schemas": {
+			"AuthInfo": {
+				"properties": {
+					"acceptedHeaders": {
+						"description": "Every request header this adapter accepts an API key in.",
+						"items": {
+							"type": "string"
+						},
+						"title": "Acceptedheaders",
+						"type": "array"
+					}
+				},
+				"required": ["acceptedHeaders"],
+				"title": "AuthInfo",
+				"type": "object"
+			},
+			"Badge": {
+				"description": "A tooltip badge. At most three are displayed per user.",
+				"properties": {
+					"color": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Background colour as hex, rgb() or a named colour.",
+						"title": "Color"
+					},
+					"text": {
+						"description": "Badge label text.",
+						"title": "Text",
+						"type": "string"
+					},
+					"textColor": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Text colour for contrast.",
+						"title": "Textcolor"
+					}
+				},
+				"required": ["text"],
+				"title": "Badge",
+				"type": "object"
+			},
+			"BatchLookupSuccess": {
+				"properties": {
+					"data": {
+						"additionalProperties": {
+							"$ref": "#/components/schemas/UserRecord"
+						},
+						"description": "Records keyed by user ID as a string. Users unknown to the upstream service are omitted.",
+						"title": "Data",
+						"type": "object"
+					},
+					"success": {
+						"const": true,
+						"default": true,
+						"title": "Success",
+						"type": "boolean"
+					}
+				},
+				"required": ["data"],
+				"title": "BatchLookupSuccess",
+				"type": "object"
+			},
+			"EndpointPair": {
+				"description": "The two URLs the Rotector extension needs for one service.",
+				"properties": {
+					"batch": {
+						"description": "Batch-lookup URL, POSTed to with an `ids` array.",
+						"title": "Batch",
+						"type": "string"
+					},
+					"name": {
+						"title": "Name",
+						"type": "string"
+					},
+					"single": {
+						"description": "Single-lookup URL, containing a `{userId}` placeholder.",
+						"title": "Single",
+						"type": "string"
+					}
+				},
+				"required": ["name", "single", "batch"],
+				"title": "EndpointPair",
+				"type": "object"
+			},
+			"LookupFailure": {
+				"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+				"properties": {
+					"error": {
+						"description": "Why the request could not be fulfilled.",
+						"title": "Error",
+						"type": "string"
+					},
+					"success": {
+						"const": false,
+						"default": false,
+						"title": "Success",
+						"type": "boolean"
+					}
+				},
+				"required": ["error"],
+				"title": "LookupFailure",
+				"type": "object"
+			},
+			"LookupSuccess": {
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/UserRecord"
+					},
+					"success": {
+						"const": true,
+						"default": true,
+						"title": "Success",
+						"type": "boolean"
+					}
+				},
+				"required": ["data"],
+				"title": "LookupSuccess",
+				"type": "object"
+			},
+			"Reason": {
+				"description": "One reason category explaining a flag.",
+				"properties": {
+					"confidence": {
+						"maximum": 1,
+						"minimum": 0,
+						"title": "Confidence",
+						"type": "number"
+					},
+					"evidence": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Evidence snippets supporting this reason.",
+						"title": "Evidence"
+					},
+					"message": {
+						"description": "Detailed explanation of the violation.",
+						"title": "Message",
+						"type": "string"
+					}
+				},
+				"required": ["message", "confidence"],
+				"title": "Reason",
+				"type": "object"
+			},
+			"RejectedAttempts": {
+				"additionalProperties": true,
+				"properties": {
+					"attempts": {
+						"default": 0,
+						"title": "Attempts",
+						"type": "integer"
+					},
+					"lastSeen": {
+						"default": 0,
+						"title": "Lastseen",
+						"type": "integer"
+					}
+				},
+				"title": "RejectedAttempts",
+				"type": "object"
+			},
+			"ResolverStatus": {
+				"description": "How the Roblox-to-Discord chain behind TASE is currently wired.",
+				"properties": {
+					"backends": {
+						"description": "Resolver backends actually in the chain, in the order they are tried.",
+						"items": {
+							"type": "string"
+						},
+						"title": "Backends",
+						"type": "array"
+					},
+					"cache": {
+						"additionalProperties": true,
+						"description": "Local resolution cache: entries, hit rate and configured TTLs.",
+						"title": "Cache",
+						"type": "object"
+					},
+					"cooldown": {
+						"additionalProperties": {
+							"type": "number"
+						},
+						"description": "Backends currently in a failure cooldown, mapped to seconds left.",
+						"title": "Cooldown",
+						"type": "object"
+					},
+					"disabled": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"description": "Backends left out of the chain, mapped to why each was left out.",
+						"title": "Disabled",
+						"type": "object"
+					}
+				},
+				"required": ["backends", "disabled", "cooldown", "cache"],
+				"title": "ResolverStatus",
+				"type": "object"
+			},
+			"Reviewer": {
+				"description": "The moderator who verified a flag. Omitted for automated detections.",
+				"properties": {
+					"displayName": {
+						"title": "Displayname",
+						"type": "string"
+					},
+					"username": {
+						"title": "Username",
+						"type": "string"
+					}
+				},
+				"required": ["username", "displayName"],
+				"title": "Reviewer",
+				"type": "object"
+			},
+			"ServiceCount": {
+				"description": "A per-service or per-outcome total inside a key drill-down.",
+				"properties": {
+					"outcome": {
+						"default": "",
+						"title": "Outcome",
+						"type": "string"
+					},
+					"requests": {
+						"default": 0,
+						"title": "Requests",
+						"type": "integer"
+					},
+					"service": {
+						"default": "",
+						"title": "Service",
+						"type": "string"
+					}
+				},
+				"title": "ServiceCount",
+				"type": "object"
+			},
+			"ServiceStatus": {
+				"description": "Reachability and usability of one upstream service.",
+				"properties": {
+					"description": {
+						"description": "What this service reports on.",
+						"title": "Description",
+						"type": "string"
+					},
+					"detail": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Why the service is unreachable or unusable. Absent when healthy.",
+						"title": "Detail"
+					},
+					"name": {
+						"description": "Display name of the service, e.g. `SCSN`.",
+						"title": "Name",
+						"type": "string"
+					},
+					"reachable": {
+						"description": "Whether a live probe reached the upstream. Also false when no probe was possible at all, such as an unreadable key file - read `detail` to tell the two apart.",
+						"title": "Reachable",
+						"type": "boolean"
+					},
+					"usable": {
+						"description": "Whether the upstream answered and accepted us. A rejected API key is reachable but not usable.",
+						"title": "Usable",
+						"type": "boolean"
+					}
+				},
+				"required": ["name", "description", "reachable", "usable"],
+				"title": "ServiceStatus",
+				"type": "object"
+			},
+			"ServiceUsage": {
+				"additionalProperties": true,
+				"properties": {
+					"avgLatencyMs": {
+						"anyOf": [
+							{
+								"type": "number"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Mean time from request to outcome, or null if not timed.",
+						"title": "Avglatencyms"
+					},
+					"byOutcome": {
+						"additionalProperties": {
+							"type": "integer"
+						},
+						"description": "Request counts per outcome, e.g. `ok`.",
+						"title": "Byoutcome",
+						"type": "object"
+					},
+					"byService": {
+						"additionalProperties": {
+							"additionalProperties": {
+								"type": "integer"
+							},
+							"type": "object"
+						},
+						"description": "Request counts per service, then per endpoint.",
+						"title": "Byservice",
+						"type": "object"
+					},
+					"firstSeen": {
+						"default": 0,
+						"title": "Firstseen",
+						"type": "integer"
+					},
+					"label": {
+						"default": "",
+						"title": "Label",
+						"type": "string"
+					},
+					"lastSeen": {
+						"default": 0,
+						"title": "Lastseen",
+						"type": "integer"
+					},
+					"recentUserIds": {
+						"description": "The 25 most recently queried user IDs.",
+						"items": {
+							"type": "string"
+						},
+						"title": "Recentuserids",
+						"type": "array"
+					},
+					"totalRequests": {
+						"default": 0,
+						"title": "Totalrequests",
+						"type": "integer"
+					}
+				},
+				"title": "ServiceUsage",
+				"type": "object"
+			},
+			"TimeseriesBucket": {
+				"description": "One time bucket of `GET /v1/admin/usage/timeseries`.",
+				"properties": {
+					"bucketStart": {
+						"description": "Unix timestamp the bucket starts at.",
+						"title": "Bucketstart",
+						"type": "integer"
+					},
+					"byOutcome": {
+						"additionalProperties": {
+							"type": "integer"
+						},
+						"description": "Request counts per outcome.",
+						"title": "Byoutcome",
+						"type": "object"
+					},
+					"requests": {
+						"description": "Total requests in the bucket.",
+						"title": "Requests",
+						"type": "integer"
+					}
+				},
+				"required": ["bucketStart", "requests"],
+				"title": "TimeseriesBucket",
+				"type": "object"
+			},
+			"TopUser": {
+				"description": "One entry of `GET /v1/admin/usage/top`.",
+				"properties": {
+					"keys": {
+						"description": "How many distinct API keys queried it.",
+						"title": "Keys",
+						"type": "integer"
+					},
+					"lastSeen": {
+						"description": "Unix timestamp of the most recent lookup.",
+						"title": "Lastseen",
+						"type": "integer"
+					},
+					"lookups": {
+						"description": "How many times this ID was looked up.",
+						"title": "Lookups",
+						"type": "integer"
+					},
+					"userId": {
+						"description": "Roblox user ID.",
+						"title": "Userid",
+						"type": "integer"
+					}
+				},
+				"required": ["userId", "lookups", "keys", "lastSeen"],
+				"title": "TopUser",
+				"type": "object"
+			},
+			"UsageSnapshot": {
+				"description": "Usage statistics, keyed by key fingerprint.",
+				"properties": {
+					"keys": {
+						"additionalProperties": {
+							"$ref": "#/components/schemas/ServiceUsage"
+						},
+						"description": "Statistics per key fingerprint.",
+						"title": "Keys",
+						"type": "object"
+					},
+					"rejected": {
+						"additionalProperties": {
+							"$ref": "#/components/schemas/RejectedAttempts"
+						},
+						"description": "Attempts rejected for a wrong or absent key, per fingerprint.",
+						"title": "Rejected",
+						"type": "object"
+					},
+					"updatedAt": {
+						"description": "Unix timestamp of the last usage flush.",
+						"title": "Updatedat",
+						"type": "integer"
+					}
+				},
+				"required": ["updatedAt", "keys", "rejected"],
+				"title": "UsageSnapshot",
+				"type": "object"
+			},
+			"UserRecord": {
+				"description": "A single user lookup result.",
+				"properties": {
+					"badges": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/Badge"
+								},
+								"maxItems": 3,
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"title": "Badges"
+					},
+					"category": {
+						"anyOf": [
+							{
+								"enum": [1, 2, 3, 4, 5, 6],
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Content category, omitted when uncategorized. 1 = CSAM | 2 = Sexual | 3 = Kink | 4 = Raceplay | 5 = Condo | 6 = Other",
+						"title": "Category"
+					},
+					"confidence": {
+						"anyOf": [
+							{
+								"maximum": 1,
+								"minimum": 0,
+								"type": "number"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Certainty score for this record.",
+						"title": "Confidence"
+					},
+					"engineVersion": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Analysis engine version.",
+						"title": "Engineversion"
+					},
+					"flagType": {
+						"description": "Outcome flag. 0 = Unflagged - no violations detected, not yet analysed, or unknown. | 1 = Flagged - system-detected violation. | 2 = Confirmed - manually verified by a human moderator. | 3 = Queued - submitted for review, not yet confirmed. | 4 = Provisional flag - flagged but reasons withheld pending review. | 5 = Mixed - some inappropriate activity, evidence inconclusive. | 6 = Past offender - previously flagged, has since cleared. | 8 = Redacted - confirmed flagged, reasons withheld for privacy.",
+						"enum": [0, 1, 2, 3, 4, 5, 6, 8],
+						"title": "Flagtype",
+						"type": "integer"
+					},
+					"id": {
+						"description": "Roblox user ID.",
+						"maximum": 9.223372036854776e18,
+						"minimum": 1,
+						"title": "Id",
+						"type": "integer"
+					},
+					"isLocked": {
+						"anyOf": [
+							{
+								"type": "boolean"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Whether the account is locked.",
+						"title": "Islocked"
+					},
+					"isReportable": {
+						"anyOf": [
+							{
+								"type": "boolean"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Whether the user can be reported through the extension.",
+						"title": "Isreportable"
+					},
+					"lastUpdated": {
+						"anyOf": [
+							{
+								"description": "Unix timestamp of the last analysis, in seconds.",
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"title": "Lastupdated"
+					},
+					"reasons": {
+						"anyOf": [
+							{
+								"additionalProperties": {
+									"$ref": "#/components/schemas/Reason"
+								},
+								"type": "object"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"description": "Reason category name to detail. Keys render verbatim.",
+						"title": "Reasons"
+					},
+					"reviewer": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/Reviewer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null
+					},
+					"versionCompatibility": {
+						"anyOf": [
+							{
+								"enum": ["current", "compatible", "outdated", "unknown"],
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"default": null,
+						"title": "Versioncompatibility"
+					}
+				},
+				"required": ["id", "flagType"],
+				"title": "UserRecord",
+				"type": "object"
+			},
+			"WhoamiData": {
+				"description": "What the calling key is permitted to do.",
+				"properties": {
+					"endpoints": {
+						"additionalProperties": {
+							"$ref": "#/components/schemas/EndpointPair"
+						},
+						"description": "Lookup URLs for the services this key may call.",
+						"title": "Endpoints",
+						"type": "object"
+					},
+					"fingerprint": {
+						"description": "SHA-256 fingerprint of the key. The key itself is never returned.",
+						"title": "Fingerprint",
+						"type": "string"
+					},
+					"isAdmin": {
+						"description": "Whether this key may read `/v1/admin/usage`.",
+						"title": "Isadmin",
+						"type": "boolean"
+					},
+					"label": {
+						"description": "Human-readable name of the key.",
+						"title": "Label",
+						"type": "string"
+					},
+					"limits": {
+						"additionalProperties": {
+							"type": "integer"
+						},
+						"title": "Limits",
+						"type": "object"
+					},
+					"rateLimitPerMinute": {
+						"title": "Ratelimitperminute",
+						"type": "integer"
+					},
+					"services": {
+						"description": "Service ids this key may call.",
+						"items": {
+							"type": "string"
+						},
+						"title": "Services",
+						"type": "array"
+					}
+				},
+				"required": [
+					"label",
+					"fingerprint",
+					"isAdmin",
+					"services",
+					"endpoints",
+					"rateLimitPerMinute",
+					"limits"
+				],
+				"title": "WhoamiData",
+				"type": "object"
+			},
+			"WhoamiSuccess": {
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/WhoamiData"
+					},
+					"success": {
+						"const": true,
+						"default": true,
+						"title": "Success",
+						"type": "boolean"
+					}
+				},
+				"required": ["data"],
+				"title": "WhoamiSuccess",
+				"type": "object"
+			}
+		},
+		"securitySchemes": {
+			"AuthorizationBearer": {
+				"scheme": "bearer",
+				"type": "http"
+			},
+			"X-Auth-Token": {
+				"in": "header",
+				"name": "X-Auth-Token",
+				"type": "apiKey"
+			}
+		}
+	},
+	"info": {
+		"description": "\nAdapter that answers the Rotector custom API contract from the SCSN and RAB\nservices.\n\nConfigure the Rotector extension with these URLs, replacing the host:\n\n* SCSN single lookup: `https://your-host/v1/scsn/v1/lookup/user/{userId}`\n* SCSN batch lookup:  `https://your-host/v1/scsn/v1/lookup/users`\n* RAB single lookup:  `https://your-host/v1/rab/v1/lookup/user/{userId}`\n* RAB batch lookup:   `https://your-host/v1/rab/v1/lookup/users`\n\nAll endpoints require an API key, issued in `Keys/Consumers.json` and accepted via\n`X-Auth-Token`, `Authorization: Bearer` or a bare `Authorization` value. Both URL\nschemes must be served over HTTPS. Handled errors are returned with HTTP 200 and a\n{\"success\": false, \"error\": \"...\"} body, as the extension treats any other status\ncode as a failure.\n\nA consumer can discover what its own key allows at `GET /v1/whoami`, and read its own\nusage at `GET /v1/usage`.\n",
+		"summary": "SCSN and RAB user flag lookups for the Rotector extension.",
+		"title": "RoProtect - Rotector custom API",
+		"version": "1.0.0"
+	},
+	"openapi": "3.1.0",
+	"paths": {
+		"/": {
+			"get": {
+				"description": "\nLists the lookup URLs the Rotector extension should be configured with, the accepted auth headers, the hard limits, and a live reachability and usability probe for every enabled service. Requires no API key.",
+				"operationId": "get_index",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Body of `GET /`.",
+									"properties": {
+										"auth": {
+											"$ref": "#/components/schemas/AuthInfo"
+										},
+										"endpoints": {
+											"items": {
+												"$ref": "#/components/schemas/EndpointPair"
+											},
+											"title": "Endpoints",
+											"type": "array"
+										},
+										"engineVersion": {
+											"title": "Engineversion",
+											"type": "string"
+										},
+										"limits": {
+											"additionalProperties": {
+												"type": "integer"
+											},
+											"title": "Limits",
+											"type": "object"
+										},
+										"resolver": {
+											"anyOf": [
+												{
+													"$ref": "#/components/schemas/ResolverStatus"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "The Roblox-to-Discord chain TASE depends on, and its cache."
+										},
+										"service": {
+											"title": "Service",
+											"type": "string"
+										},
+										"services": {
+											"additionalProperties": {
+												"$ref": "#/components/schemas/ServiceStatus"
+											},
+											"description": "One entry per enabled service, keyed by service id.",
+											"title": "Services",
+											"type": "object"
+										},
+										"uptime": {
+											"description": "Seconds since start-up.",
+											"title": "Uptime",
+											"type": "number"
+										}
+									},
+									"required": [
+										"service",
+										"engineVersion",
+										"uptime",
+										"auth",
+										"endpoints",
+										"limits",
+										"services"
+									],
+									"title": "IndexResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Body of `GET /`."
+					}
+				},
+				"summary": "Service index",
+				"tags": ["Operations"]
+			}
+		},
+		"/health": {
+			"get": {
+				"description": "\nProbes every enabled service and reports `degraded` when any of them is not usable. Intended for a load balancer or uptime check. Requires no API key.",
+				"operationId": "get_health",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Body of `GET /health`.",
+									"properties": {
+										"resolver": {
+											"anyOf": [
+												{
+													"$ref": "#/components/schemas/ResolverStatus"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "The Roblox-to-Discord chain TASE depends on, and its cache."
+										},
+										"services": {
+											"additionalProperties": {
+												"$ref": "#/components/schemas/ServiceStatus"
+											},
+											"title": "Services",
+											"type": "object"
+										},
+										"status": {
+											"description": "`degraded` when any enabled service is not usable.",
+											"enum": ["ok", "degraded"],
+											"title": "Status",
+											"type": "string"
+										},
+										"unusable": {
+											"description": "Service ids that are not currently usable.",
+											"items": {
+												"type": "string"
+											},
+											"title": "Unusable",
+											"type": "array"
+										},
+										"uptime": {
+											"title": "Uptime",
+											"type": "number"
+										}
+									},
+									"required": ["status", "uptime", "unusable", "services"],
+									"title": "HealthResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Body of `GET /health`."
+					}
+				},
+				"summary": "Health and upstream status",
+				"tags": ["Operations"]
+			}
+		},
+		"/v1/admin/usage": {
+			"get": {
+				"description": "\nOperator endpoint requiring a key flagged `\"admin\": true` in Keys/Consumers.json. Returns per-key request counts, rejected attempts, how many keys are tracked, and the fingerprints of every admin key.\n\nBecause this endpoint is not part of the Rotector contract it answers with real HTTP status codes rather than the 200-plus-error-body wrapper the lookup endpoints are forced to use: 401 for a missing or invalid key, 403 for a valid non-admin key.",
+				"operationId": "get_admin_usage",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Body of `GET /v1/admin/usage`. Failures are documented as real 401/403 responses.",
+									"properties": {
+										"adminFingerprints": {
+											"description": "Fingerprints of every key with admin access.",
+											"items": {
+												"type": "string"
+											},
+											"title": "Adminfingerprints",
+											"type": "array"
+										},
+										"keys": {
+											"additionalProperties": {
+												"$ref": "#/components/schemas/ServiceUsage"
+											},
+											"description": "Statistics per key fingerprint.",
+											"title": "Keys",
+											"type": "object"
+										},
+										"keysTracked": {
+											"description": "How many keys have recorded usage.",
+											"title": "Keystracked",
+											"type": "integer"
+										},
+										"rejected": {
+											"additionalProperties": {
+												"$ref": "#/components/schemas/RejectedAttempts"
+											},
+											"description": "Attempts rejected for a wrong or absent key, per fingerprint.",
+											"title": "Rejected",
+											"type": "object"
+										},
+										"updatedAt": {
+											"description": "Unix timestamp of the last usage flush.",
+											"title": "Updatedat",
+											"type": "integer"
+										}
+									},
+									"required": ["updatedAt", "keys", "rejected", "keysTracked", "adminFingerprints"],
+									"title": "AdminUsageResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Body of `GET /v1/admin/usage`. Failures are documented as real 401/403 responses."
+					},
+					"401": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					},
+					"403": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					}
+				},
+				"summary": "Usage statistics across every key",
+				"tags": ["Admin"]
+			}
+		},
+		"/v1/admin/usage/keys/{fingerprint}": {
+			"get": {
+				"description": "\nEverything recorded about a single key fingerprint: its label, when it was first and last seen, how many requests it made in the window, how many distinct services, endpoints and Roblox user IDs it reached, its latency spread, and its per-service and per-outcome breakdown. The fingerprint comes from `GET /v1/admin/usage` or `GET /v1/whoami`; the raw key is never accepted here.\n\nParameters: `window` is how many hours to cover, default 720 (30 days).\n\nRequires an admin key, and answers 401 or 403 like the other admin endpoints, plus 404 for a fingerprint that has never been seen.",
+				"operationId": "get_admin_usage_key",
+				"parameters": [
+					{
+						"in": "path",
+						"name": "fingerprint",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "`GET /v1/admin/usage/keys/{fingerprint}`. Failures are real 401/403/404 responses.",
+									"properties": {
+										"avgLatencyMs": {
+											"anyOf": [
+												{
+													"type": "number"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"title": "Avglatencyms"
+										},
+										"byOutcome": {
+											"items": {
+												"$ref": "#/components/schemas/ServiceCount"
+											},
+											"title": "Byoutcome",
+											"type": "array"
+										},
+										"byService": {
+											"items": {
+												"$ref": "#/components/schemas/ServiceCount"
+											},
+											"title": "Byservice",
+											"type": "array"
+										},
+										"distinctUsers": {
+											"description": "Distinct Roblox user IDs this key queried in the window.",
+											"title": "Distinctusers",
+											"type": "integer"
+										},
+										"endpoints": {
+											"description": "Distinct endpoints this key reached in the window.",
+											"title": "Endpoints",
+											"type": "integer"
+										},
+										"fingerprint": {
+											"title": "Fingerprint",
+											"type": "string"
+										},
+										"firstSeen": {
+											"default": 0,
+											"title": "Firstseen",
+											"type": "integer"
+										},
+										"label": {
+											"default": "",
+											"title": "Label",
+											"type": "string"
+										},
+										"lastSeen": {
+											"default": 0,
+											"title": "Lastseen",
+											"type": "integer"
+										},
+										"maxLatencyMs": {
+											"anyOf": [
+												{
+													"type": "number"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"title": "Maxlatencyms"
+										},
+										"minLatencyMs": {
+											"anyOf": [
+												{
+													"type": "number"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"title": "Minlatencyms"
+										},
+										"requests": {
+											"default": 0,
+											"title": "Requests",
+											"type": "integer"
+										},
+										"services": {
+											"description": "Distinct services this key reached in the window.",
+											"title": "Services",
+											"type": "integer"
+										},
+										"since": {
+											"default": 0,
+											"title": "Since",
+											"type": "integer"
+										},
+										"windowHours": {
+											"default": 0,
+											"title": "Windowhours",
+											"type": "integer"
+										}
+									},
+									"required": ["fingerprint", "services", "endpoints", "distinctUsers"],
+									"title": "AdminKeyDetailResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "`GET /v1/admin/usage/keys/{fingerprint}`. Failures are real 401/403/404 responses."
+					},
+					"401": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					},
+					"403": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					},
+					"404": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					}
+				},
+				"summary": "One key in detail",
+				"tags": ["Admin"]
+			}
+		},
+		"/v1/admin/usage/timeseries": {
+			"get": {
+				"description": "\nBuckets recorded requests by hour or day and splits each bucket by outcome, so a spike, a quiet period or a run of upstream errors is visible as a shape rather than a single total.\n\nParameters: `bucket` is `hour` or `day` (default `hour`); `window` is how many hours to cover, 1 to 8760 (default 24); `service` and `fingerprint` narrow it to one service or one key. Empty buckets are returned with zero requests rather than omitted, so the series is gap-free.\n\nRequires an admin key, and answers 401 or 403 like the other admin endpoints.",
+				"operationId": "get_admin_usage_timeseries",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "`GET /v1/admin/usage/timeseries`. Failures are real 401/403 responses.",
+									"properties": {
+										"bucket": {
+											"description": "Bucket size actually used: `hour` or `day`.",
+											"title": "Bucket",
+											"type": "string"
+										},
+										"bucketSeconds": {
+											"description": "Bucket size in seconds.",
+											"title": "Bucketseconds",
+											"type": "integer"
+										},
+										"buckets": {
+											"description": "Buckets oldest first. Empty buckets are present with zero requests.",
+											"items": {
+												"$ref": "#/components/schemas/TimeseriesBucket"
+											},
+											"title": "Buckets",
+											"type": "array"
+										},
+										"fingerprint": {
+											"anyOf": [
+												{
+													"type": "string"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "Key fingerprint filtered to, or null for every key.",
+											"title": "Fingerprint"
+										},
+										"service": {
+											"anyOf": [
+												{
+													"type": "string"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "Service filtered to, or null for every service.",
+											"title": "Service"
+										},
+										"since": {
+											"description": "Unix timestamp the window starts at.",
+											"title": "Since",
+											"type": "integer"
+										},
+										"totalRequests": {
+											"description": "Requests across every bucket in the window.",
+											"title": "Totalrequests",
+											"type": "integer"
+										},
+										"until": {
+											"description": "Unix timestamp the window ends at.",
+											"title": "Until",
+											"type": "integer"
+										}
+									},
+									"required": [
+										"bucket",
+										"bucketSeconds",
+										"since",
+										"until",
+										"buckets",
+										"totalRequests"
+									],
+									"title": "AdminTimeseriesResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "`GET /v1/admin/usage/timeseries`. Failures are real 401/403 responses."
+					},
+					"401": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					},
+					"403": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					}
+				},
+				"summary": "Request volume over time",
+				"tags": ["Admin"]
+			}
+		},
+		"/v1/admin/usage/top": {
+			"get": {
+				"description": "\nRanks Roblox user IDs by how often they were looked up, which is what per-user rows in the event log are for. A key re-checking the same few hundred accounts looks unremarkable in request totals and obvious here.\n\nParameters: `limit` is 1 to 500 (default 25); `window` is how many hours to cover, default 720 (30 days); `service` and `fingerprint` narrow the ranking.\n\nRequires an admin key, and answers 401 or 403 like the other admin endpoints.",
+				"operationId": "get_admin_usage_top",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "`GET /v1/admin/usage/top`. Failures are real 401/403 responses.",
+									"properties": {
+										"fingerprint": {
+											"anyOf": [
+												{
+													"type": "string"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "Key fingerprint filtered to, or null.",
+											"title": "Fingerprint"
+										},
+										"limit": {
+											"description": "Maximum entries returned.",
+											"title": "Limit",
+											"type": "integer"
+										},
+										"service": {
+											"anyOf": [
+												{
+													"type": "string"
+												},
+												{
+													"type": "null"
+												}
+											],
+											"default": null,
+											"description": "Service filtered to, or null.",
+											"title": "Service"
+										},
+										"since": {
+											"description": "Unix timestamp the window starts at.",
+											"title": "Since",
+											"type": "integer"
+										},
+										"users": {
+											"description": "Entries, most looked-up first.",
+											"items": {
+												"$ref": "#/components/schemas/TopUser"
+											},
+											"title": "Users",
+											"type": "array"
+										}
+									},
+									"required": ["since", "limit", "users"],
+									"title": "AdminTopUsersResponse",
+									"type": "object"
+								}
+							}
+						},
+						"description": "`GET /v1/admin/usage/top`. Failures are real 401/403 responses."
+					},
+					"401": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					},
+					"403": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"description": "Handled errors are returned with HTTP 200 per the Rotector contract.",
+									"properties": {
+										"error": {
+											"description": "Why the request could not be fulfilled.",
+											"title": "Error",
+											"type": "string"
+										},
+										"success": {
+											"const": false,
+											"default": false,
+											"title": "Success",
+											"type": "boolean"
+										}
+									},
+									"required": ["error"],
+									"title": "LookupFailure",
+									"type": "object"
+								}
+							}
+						},
+						"description": "Handled errors are returned with HTTP 200 per the Rotector contract."
+					}
+				},
+				"summary": "Most frequently looked-up users",
+				"tags": ["Admin"]
+			}
+		},
+		"/v1/rab/v1/lookup/user/{userId}": {
+			"get": {
+				"description": "\nLooks up RAB (moco-co) group-membership records for one Roblox user.\n\nAny tracked group membership is reported as `flagType` 1 (Flagged), with the count and breakdown by group type in the reasons and badges. A known user with no memberships is returned as `flagType` 0 (Unflagged), as is a user RAB has no record of. The content category is inferred from the reported group types and omitted when nothing matches.",
+				"operationId": "get_rab_single_lookup",
+				"parameters": [
+					{
+						"in": "path",
+						"name": "userId",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/LookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Single-user lookup: either a record or a handled error.",
+									"title": "SingleLookupResponse"
+								}
+							}
+						},
+						"description": "Single-user lookup: either a record or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Single RAB user lookup",
+				"tags": ["RAB"]
+			}
+		},
+		"/v1/rab/v1/lookup/users": {
+			"post": {
+				"description": "\nLooks up RAB (moco-co) group-membership records for one Roblox user.\n\nAny tracked group membership is reported as `flagType` 1 (Flagged), with the count and breakdown by group type in the reasons and badges. A known user with no memberships is returned as `flagType` 0 (Unflagged), as is a user RAB has no record of. The content category is inferred from the reported group types and omitted when nothing matches.\n\nUsers with no record in RAB are omitted from the map, as the contract requires.",
+				"operationId": "post_rab_batch_lookup",
+				"parameters": [],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"properties": {
+									"ids": {
+										"description": "Roblox user IDs to look up, at most 100 per batch. String IDs are accepted.",
+										"items": {
+											"description": "Roblox user ID.",
+											"maximum": 9.223372036854776e18,
+											"minimum": 1,
+											"type": "integer"
+										},
+										"maxItems": 100,
+										"minItems": 1,
+										"title": "Ids",
+										"type": "array"
+									}
+								},
+								"required": ["ids"],
+								"title": "BatchLookupRequest",
+								"type": "object"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/BatchLookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Batch lookup: a map of records, or a handled error.",
+									"title": "BatchLookupResponse"
+								}
+							}
+						},
+						"description": "Batch lookup: a map of records, or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Batch RAB user lookup",
+				"tags": ["RAB"]
+			}
+		},
+		"/v1/scsn/v1/lookup/user/{userId}": {
+			"get": {
+				"description": "\nLooks up SCSN group-membership records for one Roblox user.\n\nActive membership in an SCSN-tracked group is reported as `flagType` 1 (Flagged). Groups the user has since left are listed separately and downgrade the result to `flagType` 6 (Past offender) when no active membership remains. A user with no SCSN record at all is returned as `flagType` 0 (Unflagged). The content category is inferred from the tracked group names and omitted when nothing matches.",
+				"operationId": "get_scsn_single_lookup",
+				"parameters": [
+					{
+						"in": "path",
+						"name": "userId",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/LookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Single-user lookup: either a record or a handled error.",
+									"title": "SingleLookupResponse"
+								}
+							}
+						},
+						"description": "Single-user lookup: either a record or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Single SCSN user lookup",
+				"tags": ["SCSN"]
+			}
+		},
+		"/v1/scsn/v1/lookup/users": {
+			"post": {
+				"description": "\nLooks up SCSN group-membership records for one Roblox user.\n\nActive membership in an SCSN-tracked group is reported as `flagType` 1 (Flagged). Groups the user has since left are listed separately and downgrade the result to `flagType` 6 (Past offender) when no active membership remains. A user with no SCSN record at all is returned as `flagType` 0 (Unflagged). The content category is inferred from the tracked group names and omitted when nothing matches.\n\nUsers with no record in SCSN are omitted from the map, as the contract requires.",
+				"operationId": "post_scsn_batch_lookup",
+				"parameters": [],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"properties": {
+									"ids": {
+										"description": "Roblox user IDs to look up, at most 100 per batch. String IDs are accepted.",
+										"items": {
+											"description": "Roblox user ID.",
+											"maximum": 9.223372036854776e18,
+											"minimum": 1,
+											"type": "integer"
+										},
+										"maxItems": 100,
+										"minItems": 1,
+										"title": "Ids",
+										"type": "array"
+									}
+								},
+								"required": ["ids"],
+								"title": "BatchLookupRequest",
+								"type": "object"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/BatchLookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Batch lookup: a map of records, or a handled error.",
+									"title": "BatchLookupResponse"
+								}
+							}
+						},
+						"description": "Batch lookup: a map of records, or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Batch SCSN user lookup",
+				"tags": ["SCSN"]
+			}
+		},
+		"/v1/tase/v1/lookup/user/{userId}": {
+			"get": {
+				"description": "\nLooks up The All Seeing Eye (TASE) records for one Roblox user.\n\nTASE indexes Discord accounts rather than Roblox accounts, so the Roblox user ID is first resolved to their Discord IDs, and those IDs are then scanned. Resolution walks a chain of verification services - RoWifi, then RoVer, then Bloxlink - and the first one that returns a link wins. Only Discord accounts whose owner gave reverse-search consent to one of those services can be matched, so an empty result is normal.\n\nA user is reported as unflagged only when every service in the chain confirmed there is no link. If any of them is unreachable the lookup fails closed rather than guessing, so an error here means unknown, not clean.\n\nAny server TASE detected the account in is reported as `flagType` 1 (Flagged), with the server names, detection types and activity score in the reasons and badges. A user TASE knows nothing about is returned as `flagType` 0 (Unflagged), as is a user with no consented Discord link. The content category is inferred from the reported detection types and omitted when nothing matches.",
+				"operationId": "get_tase_single_lookup",
+				"parameters": [
+					{
+						"in": "path",
+						"name": "userId",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/LookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Single-user lookup: either a record or a handled error.",
+									"title": "SingleLookupResponse"
+								}
+							}
+						},
+						"description": "Single-user lookup: either a record or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Single TASE user lookup",
+				"tags": ["TASE"]
+			}
+		},
+		"/v1/tase/v1/lookup/users": {
+			"post": {
+				"description": "\nLooks up The All Seeing Eye (TASE) records for one Roblox user.\n\nTASE indexes Discord accounts rather than Roblox accounts, so the Roblox user ID is first resolved to their Discord IDs, and those IDs are then scanned. Resolution walks a chain of verification services - RoWifi, then RoVer, then Bloxlink - and the first one that returns a link wins. Only Discord accounts whose owner gave reverse-search consent to one of those services can be matched, so an empty result is normal.\n\nA user is reported as unflagged only when every service in the chain confirmed there is no link. If any of them is unreachable the lookup fails closed rather than guessing, so an error here means unknown, not clean.\n\nAny server TASE detected the account in is reported as `flagType` 1 (Flagged), with the server names, detection types and activity score in the reasons and badges. A user TASE knows nothing about is returned as `flagType` 0 (Unflagged), as is a user with no consented Discord link. The content category is inferred from the reported detection types and omitted when nothing matches.\n\nUsers with no record in TASE are omitted from the map, as the contract requires.",
+				"operationId": "post_tase_batch_lookup",
+				"parameters": [],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"properties": {
+									"ids": {
+										"description": "Roblox user IDs to look up, at most 100 per batch. String IDs are accepted.",
+										"items": {
+											"description": "Roblox user ID.",
+											"maximum": 9.223372036854776e18,
+											"minimum": 1,
+											"type": "integer"
+										},
+										"maxItems": 100,
+										"minItems": 1,
+										"title": "Ids",
+										"type": "array"
+									}
+								},
+								"required": ["ids"],
+								"title": "BatchLookupRequest",
+								"type": "object"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/BatchLookupSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "Batch lookup: a map of records, or a handled error.",
+									"title": "BatchLookupResponse"
+								}
+							}
+						},
+						"description": "Batch lookup: a map of records, or a handled error."
+					}
+				},
+				"security": [
+					{
+						"X-Auth-Token": []
+					},
+					{
+						"AuthorizationBearer": []
+					}
+				],
+				"summary": "Batch TASE user lookup",
+				"tags": ["TASE"]
+			}
+		},
+		"/v1/usage": {
+			"get": {
+				"description": "\nReturns request counts broken down by service, endpoint and outcome for this key alone, plus its 25 most recently queried user IDs. Other keys are never included.",
+				"operationId": "get_usage",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/UsageSnapshot"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "`GET /v1/usage`: the calling key's own statistics, or a handled failure.\n\nThe statistics are always scoped to the calling key. A missing or invalid key\nyields the contract's failure wrapper instead, with HTTP 200.",
+									"title": "UsageResponse"
+								}
+							}
+						},
+						"description": "`GET /v1/usage`: the calling key's own statistics, or a handled failure.\n\nThe statistics are always scoped to the calling key. A missing or invalid key\nyields the contract's failure wrapper instead, with HTTP 200."
+					}
+				},
+				"summary": "Usage statistics for the calling key",
+				"tags": ["Consumer"]
+			}
+		},
+		"/v1/whoami": {
+			"get": {
+				"description": "\nReports the label, fingerprint, admin status, permitted services, per-service lookup URLs, rate limit and limits of the key making the request. The key itself is never echoed. Use this to debug a key that the extension says is being rejected.",
+				"operationId": "get_whoami",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/WhoamiSuccess"
+										},
+										{
+											"$ref": "#/components/schemas/LookupFailure"
+										}
+									],
+									"description": "`GET /v1/whoami`: the caller's own grants, or a handled failure.",
+									"title": "WhoamiResponse"
+								}
+							}
+						},
+						"description": "`GET /v1/whoami`: the caller's own grants, or a handled failure."
+					}
+				},
+				"summary": "Describe the calling API key",
+				"tags": ["Consumer"]
+			}
+		}
+	},
+	"security": [
+		{
+			"X-Auth-Token": []
+		},
+		{
+			"AuthorizationBearer": []
+		}
+	],
+	"tags": [
+		{
+			"description": "SCSN group-membership records.",
+			"name": "SCSN"
+		},
+		{
+			"description": "RAB (moco-co) group-membership records.",
+			"name": "RAB"
+		},
+		{
+			"description": "TASE (The All Seeing Eye) Discord records, matched to a Roblox user through RoWifi. Two-hop: the Roblox ID is resolved to its consented Discord IDs first, so an empty result is normal. RoVer and Bloxlink are wired as fallbacks but ship disabled.",
+			"name": "TASE"
+		},
+		{
+			"description": "Service discovery and health. No API key required.",
+			"name": "Operations"
+		},
+		{
+			"description": "Self-service endpoints scoped to the calling API key.",
+			"name": "Consumer"
+		},
+		{
+			"description": "Operator endpoints. Requires a key with admin access.",
+			"name": "Admin"
+		}
+	]
+}

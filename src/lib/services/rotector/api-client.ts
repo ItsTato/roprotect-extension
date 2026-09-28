@@ -304,6 +304,13 @@ class RotectorApiClient {
 			{ signal: opts.signal }
 		);
 	}
+
+	async whoami(apiKey: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
+		return sendMessage<{ success: boolean; data?: unknown; error?: string }>(
+			API_ACTIONS.API_WHOAMI,
+			{ apiKey }
+		);
+	}
 }
 
 export const apiClient = new RotectorApiClient();

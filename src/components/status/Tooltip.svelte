@@ -96,11 +96,9 @@
 	import { tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { _ } from 'svelte-i18n';
-	import { SETTINGS_KEYS } from '@/lib/types/settings';
-
 	import type { CombinedStatus } from '@/lib/types/custom-api';
-	import { ROTECTOR_API_ID } from '@/lib/stores/custom-apis';
 	import { settings, updateSetting, removeSetting } from '@/lib/stores/settings';
+	import { SETTINGS_KEYS } from '@/lib/types/settings';
 	import { themeManager } from '@/lib/utils/theme';
 	import { guardWatermark, renderWatermarkTile } from './watermark';
 	import {
@@ -195,7 +193,12 @@
 	let hoverPopover: HoverPopoverInstance | undefined = $state();
 	let userInfo: UserInfo | null = $state(null);
 	let groupInfo: GroupInfo | null = $state(null);
-	let activeTab = $state<string>(ROTECTOR_API_ID);
+	const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
+	function isSystemApiTab(tabId: string): boolean {
+		return SYSTEM_API_IDS.includes(tabId as (typeof SYSTEM_API_IDS)[number]);
+	}
+
+	let activeTab = $state<string>(SYSTEM_API_IDS[0]);
 	let lastSelectedForUserId = $state<string | number | null>(null);
 
 	const hintsSeen = $derived(new Set<string>($settings[SETTINGS_KEYS.INFO_POPOVER_HINTS_SEEN]));
@@ -241,7 +244,7 @@
 	const activeApiResult = $derived(userStatus?.get(activeTab) ?? null);
 	const activeStatus = $derived(activeApiResult?.data ?? null);
 	const activeError = $derived(
-		activeApiResult?.error ?? (activeTab === ROTECTOR_API_ID ? (error ?? null) : null)
+		activeApiResult?.error ?? (isSystemApiTab(activeTab) ? (error ?? null) : null)
 	);
 	const activeLoading = $derived(activeApiResult?.loading ?? false);
 
@@ -317,14 +320,14 @@
 	const shouldShowVoting = $derived(
 		!isGroup &&
 			!voteAccessDenied &&
-			activeTab === ROTECTOR_API_ID && // Only show voting on Rotector tab
+			isSystemApiTab(activeTab) && // Only show voting on system API tabs
 			activeUserStatus &&
 			VOTABLE_FLAGS.includes(activeUserStatus.flagType)
 	);
 
 	const isSafeUserWithQueueOnly = $derived(
 		!isGroup &&
-			activeTab === ROTECTOR_API_ID && // Only show queue on Rotector tab
+			isSystemApiTab(activeTab) && // Only show queue on system API tabs
 			activeUserStatus &&
 			(activeUserStatus.flagType === STATUS.FLAGS.SAFE ||
 				(activeUserStatus.flagType === STATUS.FLAGS.QUEUED && activeUserStatus.processed === true))
@@ -345,7 +348,7 @@
 
 	// Minimal tooltip entities skip saved height
 	const isMinimalEntity = $derived(
-		activeTab === ROTECTOR_API_ID &&
+		isSystemApiTab(activeTab) &&
 			activeStatus &&
 			MINIMAL_ENTITY_FLAGS.includes(activeStatus.flagType)
 	);
@@ -385,7 +388,7 @@
 	);
 
 	const customApiBadges = $derived.by(() => {
-		if (activeTab === ROTECTOR_API_ID || isGroup || !userStatus) return [];
+		if (isSystemApiTab(activeTab) || isGroup || !userStatus) return [];
 
 		const data = userStatus.get(activeTab)?.data;
 		return data && 'badges' in data ? (data.badges ?? []) : [];
@@ -635,7 +638,7 @@
 	});
 
 	const metadataInfo = $derived.by(() => {
-		if (isGroup || activeTab !== ROTECTOR_API_ID) return null;
+		if (isGroup || !isSystemApiTab(activeTab)) return null;
 		if (!activeUserStatus) return null;
 
 		const queuedAt = activeUserStatus.queuedAt;
@@ -1521,7 +1524,7 @@
 											<Info size={14} />
 										</button>
 									{/if}
-									{#if activeTab === ROTECTOR_API_ID && !isGroup}
+									{#if isSystemApiTab(activeTab) && !isGroup}
 										{#if reason.typeName === REASON_KEYS.USER_PROFILE && badgeStatus.isReportable}
 											<ExtLink
 												class="reportable-pill"

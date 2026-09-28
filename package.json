@@ -17,7 +17,7 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json --tsgo --incremental",
 		"lint": "oxlint && eslint . --cache && oxfmt --check",
 		"lint:fix": "oxlint --fix && eslint . --cache --fix && oxfmt",
-		"knip": "knip",
+		"knip": "knip --tsConfig tsconfig.json",
 		"knip:production": "knip --production",
 		"stylelint": "stylelint \"src/styles/**/*.css\" --cache",
 		"stylelint:fix": "stylelint \"src/styles/**/*.css\" --cache --fix",

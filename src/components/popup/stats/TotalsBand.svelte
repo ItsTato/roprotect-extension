@@ -31,10 +31,4 @@
 		</span>
 		<span class="totals-band-label">{$_('stats_totals_groups')}</span>
 	</div>
-	<div class="totals-band-item">
-		<span class="totals-band-value" title={formatNumber(totals?.queuedUsers)}>
-			{formatCompact(totals?.queuedUsers)}
-		</span>
-		<span class="totals-band-label">{$_('stats_totals_queued')}</span>
-	</div>
 </section>

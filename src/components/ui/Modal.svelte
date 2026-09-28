@@ -4,7 +4,7 @@
 	import { CircleCheckBig, CircleX, Info, TriangleAlert, X } from '@lucide/svelte';
 
 	type ModalStatus = 'info' | 'warning' | 'success' | 'error';
-	type ModalSize = 'normal' | 'small' | 'wide';
+	type ModalSize = 'normal' | 'small' | 'wide' | 'narrow';
 
 	interface ModalProps {
 		isOpen: boolean;
@@ -55,7 +55,8 @@
 	const POPUP_CLASS = {
 		normal: 'modal-popup',
 		small: 'modal-popup-small',
-		wide: 'modal-popup-wide'
+		wide: 'modal-popup-wide',
+		narrow: 'modal-popup-narrow'
 	} as const;
 
 	const headingId = `modal-title-${Math.random().toString(36).slice(2)}`;

@@ -3,7 +3,7 @@
 	import { stats, statsRange, statsState } from '@/lib/stores/stats';
 	import { ACTIVITY_HOURS, type ActivityHours } from '@/lib/types/stats';
 	import { GROUP_CATEGORIES, USER_CATEGORIES } from './activity-chart';
-	import { formatCompact, formatNumber } from '@/lib/utils/format';
+	import { formatCompact } from '@/lib/utils/format';
 	import ActivityLegendPill from './ActivityLegendPill.svelte';
 	import ActivityLineChart from './ActivityLineChart.svelte';
 
@@ -102,15 +102,5 @@
 			loading={isLoading}
 			visibility={groupVisibility}
 		/>
-	</div>
-
-	<div class="activity-group activity-community">
-		<div class="activity-group-label">{$_('stats_activity_community')}</div>
-		<div class="activity-community-line">
-			<span class="activity-community-value" title={formatNumber(totals?.votesCast)}>
-				{formatCompact(totals?.votesCast)}
-			</span>
-			<span class="activity-community-label">{$_('stats_activity_votes_cast')}</span>
-		</div>
 	</div>
 </section>

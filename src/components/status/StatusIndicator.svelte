@@ -9,7 +9,7 @@
 	import CanvasText from '@/components/ui/CanvasText.svelte';
 	import { groupStatusService, userStatusService } from '@/lib/services/rotector/entity-status';
 	import { countCustomApiFlags } from '@/lib/services/rotector/unified-query';
-	import { ROTECTOR_API_ID } from '@/lib/stores/custom-apis';
+	import { RO_PROTECT_API_ID } from '@/lib/stores/custom-apis';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
 	import { openOutfitViewer } from '@/lib/stores/outfit-viewer';
@@ -89,7 +89,7 @@
 			return getStatusConfig(cachedStatus, cachedStatus, !cachedStatus, null, entityType);
 		}
 
-		const rotector = entityStatus.get(ROTECTOR_API_ID);
+		const rotector = entityStatus.get(RO_PROTECT_API_ID);
 		const rotectorStatus = rotector?.data ?? cachedStatus;
 		const rotectorLoading = rotector?.loading ?? false;
 		const rotectorError = rotector?.error ?? null;
@@ -142,7 +142,7 @@
 		})
 	);
 
-	const rotector = $derived(entityStatus?.get(ROTECTOR_API_ID));
+	const rotector = $derived(entityStatus?.get(RO_PROTECT_API_ID));
 	const rotectorLoading = $derived(rotector?.loading ?? false);
 	const hasData = $derived(!!(rotector?.data ?? cachedStatus));
 	const anyApiHasData = $derived(

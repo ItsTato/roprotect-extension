@@ -27,19 +27,18 @@ export const ENTITY_TYPES = {
 	GROUP: 'group'
 } as const;
 
-export const KOFI_URL = 'https://ko-fi.com/rotector';
-
 export const RAYWARD_URL = 'https://rayward.app';
 
-export const RAYWARD_ANNOUNCEMENT_URL = 'https://rotector.com/blog/extension-is-becoming-rayward';
+export const RAYWARD_ANNOUNCEMENT_URL =
+	'https://roprotect.tlet.xyz/blog/extension-is-becoming-rayward';
 
 export const CHROME_STORE_REVIEW_URL =
-	'https://chromewebstore.google.com/detail/rotector-roblox-safety-wa/ilegibonffbmecfchpcmcmknocboagan/reviews';
+	'https://chromewebstore.google.com/detail/roprotect/roprotect/reviews';
 export const FIREFOX_STORE_REVIEW_URL =
-	'https://addons.mozilla.org/en-US/firefox/addon/rotector/reviews/';
+	'https://addons.mozilla.org/en-US/firefox/addon/roprotect/reviews/';
 
 const API_DOMAIN =
-	import.meta.env.USE_DEV_API === 'true' ? 'roscoe-dev.rotector.com' : 'roscoe.rotector.com';
+	import.meta.env.USE_DEV_API === 'true' ? 'roprotect-dev.tlet.xyz' : 'roprotect.tlet.xyz';
 
 export const API_CONFIG = {
 	BASE_URL: `https://${API_DOMAIN}`,
@@ -70,16 +69,16 @@ export const API_CONFIG = {
 		LEADERBOARD: '/v1/leaderboard'
 	},
 	BATCH_SIZE: 100,
-	BATCH_DELAY: 250, // ms between batches
+	BATCH_DELAY: 250,
 	MAX_RETRIES: 3,
-	RETRY_DELAY: 1000, // base delay in ms
-	TIMEOUT: 10_000, // 10 seconds
-	EXPORT_TIMEOUT: 30_000, // 30 seconds for large export downloads
-	QUEUE_POLL_INTERVAL: 30_000, // background queue-status poll cadence
-	PROGRESSIVE_API_TIMEOUT: 15_000, // per-API timeout when racing custom + system APIs
-	OUTFIT_SNAPSHOT_MAX_ITEMS: 50, // upper bound on outfit-name lookups per snapshot
-	TRANSLATION_CACHE_MAX: 100, // in-memory translation cache size
-	TRANSLATION_CACHE_TTL: 60 * 60 * 1000 // 1 hour
+	RETRY_DELAY: 1000,
+	TIMEOUT: 10_000,
+	EXPORT_TIMEOUT: 30_000,
+	QUEUE_POLL_INTERVAL: 30_000,
+	PROGRESSIVE_API_TIMEOUT: 15_000,
+	OUTFIT_SNAPSHOT_MAX_ITEMS: 50,
+	TRANSLATION_CACHE_MAX: 100,
+	TRANSLATION_CACHE_TTL: 60 * 60 * 1000
 } as const;
 
 // API Actions for message passing
@@ -117,7 +116,8 @@ export const API_ACTIONS = {
 	ME_REFRESH_IDENTITY: 'meRefreshIdentity',
 	ME_LIST_SESSIONS: 'meListSessions',
 	ME_REVOKE_SESSION: 'meRevokeSession',
-	GET_LEADERBOARD: 'getLeaderboard'
+	GET_LEADERBOARD: 'getLeaderboard',
+	API_WHOAMI: 'apiWhoami'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {
@@ -220,13 +220,6 @@ export const LOOKUP_CONTEXT = {
 	FRIENDS: 'friends',
 	GROUPS: 'groups',
 	PROFILE: 'profile'
-} as const;
-
-export const REQUIRED_LEGAL_VERSION = '2.17.1';
-
-export const LEGAL_URLS = {
-	terms: 'https://rotector.com/terms',
-	privacy: 'https://rotector.com/privacy'
 } as const;
 
 // Roblox API base URLs

@@ -88,3 +88,58 @@ export async function customApiCheckMultipleUsers(
 		}
 	});
 }
+
+interface WhoamiResponse {
+	services: string[];
+	endpoints: Record<string, { single: string; batch: string }>;
+	label: string;
+	fingerprint: string;
+	isAdmin: boolean;
+	rateLimitPerMinute: number;
+	limits: Record<string, number>;
+}
+
+interface WhoamiApiResponse {
+	success: boolean;
+	data?: WhoamiResponse;
+	error?: string;
+}
+
+export async function apiWhoami(
+	apiKey: string
+): Promise<{ success: boolean; data?: WhoamiResponse; error?: string }> {
+	const apiDomain =
+		process.env['NODE_ENV'] === 'development' || process.argv.includes('dev')
+			? 'roprotect-dev.tlet.xyz'
+			: 'roprotect.tlet.xyz';
+	const url = `https://${apiDomain}/v1/whoami`;
+
+	logger.debug('Background: API whoami', { apiKey: `${apiKey.slice(0, 8)}...` });
+
+	try {
+		const response = await makeHttpRequest<WhoamiResponse>(url, {
+			method: 'GET',
+			headers: {
+				'X-Auth-Token': apiKey
+			},
+			timeout: 10_000,
+			rawResponse: true,
+			parse: (payload) => {
+				const parsed = payload as WhoamiApiResponse;
+				if (!parsed.success) {
+					throw new Error(parsed.error ?? 'API returned error without message');
+				}
+				if (!parsed.data) {
+					throw new Error('API returned success but missing data');
+				}
+				return parsed.data;
+			}
+		});
+
+		return { success: true, data: response };
+	} catch (error) {
+		logger.error('API whoami failed:', error);
+		const err = error as Error;
+		return { success: false, error: err.message };
+	}
+}

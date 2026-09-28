@@ -54,48 +54,10 @@ async function waitForBody(): Promise<HTMLElement> {
 
 export default defineContentScript({
 	matches: [
-		// Standard URLs
-		'https://*.roblox.com/users/*/profile*',
-		'https://*.roblox.com/users/*/profile/*',
-		'https://*.roblox.com/home*',
-		'https://*.roblox.com/home/*',
-		'https://*.roblox.com/users/*/friends*',
-		'https://*.roblox.com/users/*/friends/*',
-		'https://*.roblox.com/users/*/followers*',
-		'https://*.roblox.com/users/*/followers/*',
-		'https://*.roblox.com/users/*/following*',
-		'https://*.roblox.com/users/*/following/*',
-		'https://*.roblox.com/users/friends*',
-		'https://*.roblox.com/users/friends/*',
-		'https://*.roblox.com/groups*',
-		'https://*.roblox.com/groups/*',
-		'https://*.roblox.com/communities*',
-		'https://*.roblox.com/communities/*',
-		'https://*.roblox.com/search/users*',
-		'https://*.roblox.com/search/users/*',
-		'https://*.roblox.com/report-abuse*',
-		'https://*.roblox.com/report-abuse/*',
+		// All Roblox pages
+		'https://*.roblox.com/*',
 		// Internationalized URLs
-		'https://*.roblox.com/*/users/*/profile*',
-		'https://*.roblox.com/*/users/*/profile/*',
-		'https://*.roblox.com/*/home*',
-		'https://*.roblox.com/*/home/*',
-		'https://*.roblox.com/*/users/*/friends*',
-		'https://*.roblox.com/*/users/*/friends/*',
-		'https://*.roblox.com/*/users/*/followers*',
-		'https://*.roblox.com/*/users/*/followers/*',
-		'https://*.roblox.com/*/users/*/following*',
-		'https://*.roblox.com/*/users/*/following/*',
-		'https://*.roblox.com/*/users/friends*',
-		'https://*.roblox.com/*/users/friends/*',
-		'https://*.roblox.com/*/groups*',
-		'https://*.roblox.com/*/groups/*',
-		'https://*.roblox.com/*/communities*',
-		'https://*.roblox.com/*/communities/*',
-		'https://*.roblox.com/*/search/users*',
-		'https://*.roblox.com/*/search/users/*',
-		'https://*.roblox.com/*/report-abuse*',
-		'https://*.roblox.com/*/report-abuse/*'
+		'https://*.roblox.com/*/*'
 	],
 	runAt: 'document_start',
 

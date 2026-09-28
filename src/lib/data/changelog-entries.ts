@@ -96,7 +96,8 @@ export const CHANGELOGS: Changelog[] = [
 			},
 			{
 				type: 'changed',
-				description: 'Ko-fi URL - Membership and funding links now point to ko-fi.com/rotector'
+				description:
+					'Funding links removed - Ko-fi and funding section removed; Discord link updated'
 			},
 			{
 				type: 'changed',

@@ -21,7 +21,6 @@
 		MembershipVerificationChallenge
 	} from '@/lib/types/api';
 	import { settings, updateSetting } from '@/lib/stores/settings';
-	import { KOFI_URL } from '@/lib/types/constants';
 	import { SETTINGS_KEYS } from '@/lib/types/settings';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
 	import {
@@ -53,9 +52,8 @@
 		type IconDesignKey
 	} from '@/lib/utils/membership-designs';
 
-	const DISCORD_URL = 'https://discord.gg/rotector';
+	const DISCORD_URL = 'https://discord.gg/ZwJbrWHPVz';
 	const ctaRows = [
-		{ href: KOFI_URL, labelKey: 'membership_cta_kofi', variant: 'kofi' },
 		{ href: DISCORD_URL, labelKey: 'membership_cta_discord', variant: 'discord' }
 	] as const;
 	const AXIS_PAYLOAD_KEY: Readonly<Record<DesignAxis, keyof MembershipBadgeUpdatePayload>> = {
@@ -530,7 +528,7 @@
 		<p class="membership-section-description">{$_('membership_how_description')}</p>
 		<ol class="membership-steps-list">
 			<li>
-				{step1Parts[0]}<ExtLink class="membership-inline-link" href={KOFI_URL}
+				{step1Parts[0]}<ExtLink class="membership-inline-link" href={DISCORD_URL}
 					>{$_('membership_step_1_link')}</ExtLink
 				>{step1Parts[1]}
 			</li>

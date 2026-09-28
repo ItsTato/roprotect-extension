@@ -2,7 +2,7 @@ import type { CombinedStatus, CustomApiConfig, CustomApiResult } from '../../typ
 import type { GroupStatus, UserStatus } from '../../types/api';
 import { apiClient } from './api-client';
 import { userStatusService } from './entity-status';
-import { customApis, ROTECTOR_API_ID } from '../../stores/custom-apis';
+import { customApis } from '../../stores/custom-apis';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { settings } from '../../stores/settings';
 import { getLoggedInUserId } from '../../utils/client-id';
@@ -22,6 +22,8 @@ interface QueryMultipleUsersOptions {
 	signal?: AbortSignal | undefined;
 	onUpdate?: ((userId: string, status: CombinedStatus<UserStatus>) => void) | undefined;
 }
+
+const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
 
 function shouldBlockLookup(userId: string): boolean {
 	const { isRestricted } = get(restrictedAccessStore);
@@ -52,6 +54,10 @@ function getEnabledCustomApis(): CustomApiConfig[] {
 	return get(customApis)
 		.filter((api) => api.enabled && (api.isSystem || experimentalCustomApisEnabled))
 		.toSorted((a, b) => a.order - b.order);
+}
+
+function isSystemApi(api: CustomApiConfig): boolean {
+	return !!api.isSystem && SYSTEM_API_IDS.includes(api.id as (typeof SYSTEM_API_IDS)[number]);
 }
 
 // Query a single user with progressive updates as each API completes
@@ -93,13 +99,12 @@ export function queryUserProgressive(
 			landscapeImageDataUrl: api.landscapeImageDataUrl
 		};
 		try {
-			const result =
-				api.isSystem && api.id === ROTECTOR_API_ID
-					? await userStatusService.getStatus(userId, { signal: apiSignal })
-					: await apiClient.checkUser(userId, {
-							apiConfig: api,
-							signal: apiSignal
-						});
+			const result = api.isSystem
+				? await userStatusService.getStatus(userId, { signal: apiSignal })
+				: await apiClient.checkUser(userId, {
+						apiConfig: api,
+						signal: apiSignal
+					});
 
 			if (controller.signal.aborted) return;
 
@@ -121,7 +126,7 @@ export function queryUserProgressive(
 	};
 }
 
-// Fans user IDs across every enabled API, routing Rotector through the cache-aware userStatusService and honoring restricted-access mode
+// Fans user IDs across every enabled API, routing system APIs through the cache-aware userStatusService and honoring restricted-access mode
 export async function queryMultipleUsers(
 	userIds: string[],
 	options?: QueryMultipleUsersOptions
@@ -182,24 +187,27 @@ export async function queryMultipleUsers(
 		onUpdate?.(userId, new Map(combined));
 	};
 
-	const rotectorApi = enabledApis.find((api) => api.isSystem && api.id === ROTECTOR_API_ID);
-	const nonRotectorApis = enabledApis.filter(
-		(api) => !(api.isSystem && api.id === ROTECTOR_API_ID)
-	);
+	const systemApis = enabledApis.filter(isSystemApi);
+	const customApisList = enabledApis.filter((api) => !isSystemApi(api));
 
 	logger.debug('Unified batch query starting:', {
 		userCount: userIds.length,
-		totalApis: enabledApis.length
+		totalApis: enabledApis.length,
+		systemApis: systemApis.map((a) => a.id),
+		customApis: customApisList.map((a) => a.id)
 	});
 
-	const rotectorPromise = (async () => {
-		if (!rotectorApi) return;
+	const systemPromise = (async () => {
+		if (systemApis.length === 0) return;
 
 		const toFetch: string[] = [];
 		for (const userId of userIds) {
 			const cached = userStatusService.getCachedStatus(userId);
 			if (cached) {
-				setApiResult(userId, rotectorApi, { data: cached });
+				// Apply cached status to all system APIs
+				for (const api of systemApis) {
+					setApiResult(userId, api, { data: cached });
+				}
 			} else {
 				toFetch.push(userId);
 			}
@@ -216,15 +224,19 @@ export async function queryMultipleUsers(
 				}
 				for (const userId of chunk) {
 					const userStatus = userMap.get(userId);
-					setApiResult(userId, rotectorApi, userStatus ? { data: userStatus } : {});
+					for (const api of systemApis) {
+						setApiResult(userId, api, userStatus ? { data: userStatus } : {});
+					}
 				}
 			} catch (error) {
 				if (signal?.aborted) return;
 				const errorMessage = asApiError(error).message;
 				for (const userId of chunk) {
-					setApiResult(userId, rotectorApi, { error: errorMessage });
+					for (const api of systemApis) {
+						setApiResult(userId, api, { error: errorMessage });
+					}
 				}
-				logger.error('Rotector batch error:', { chunkSize: chunk.length, error: errorMessage });
+				logger.error('System API batch error:', { chunkSize: chunk.length, error: errorMessage });
 			}
 		};
 
@@ -236,8 +248,8 @@ export async function queryMultipleUsers(
 		}
 	})();
 
-	const nonRotectorPromise = (async () => {
-		if (nonRotectorApis.length === 0) return;
+	const customPromise = (async () => {
+		if (customApisList.length === 0) return;
 		const chunks = chunkArray(userIds, API_CONFIG.BATCH_SIZE);
 
 		for (const [i, chunk] of chunks.entries()) {
@@ -247,7 +259,7 @@ export async function queryMultipleUsers(
 			if (signal?.aborted) throw getAbortError(signal);
 
 			await Promise.all(
-				nonRotectorApis.map(async (api) => {
+				customApisList.map(async (api) => {
 					try {
 						const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
 							signal,
@@ -265,7 +277,7 @@ export async function queryMultipleUsers(
 						for (const userId of chunk) {
 							setApiResult(userId, api, { error: errorMessage });
 						}
-						logger.error('API batch error:', {
+						logger.error('Custom API batch error:', {
 							chunkSize: chunk.length,
 							apiId: api.id,
 							apiName: api.name,
@@ -274,12 +286,10 @@ export async function queryMultipleUsers(
 					}
 				})
 			);
-
-			if (signal?.aborted) throw getAbortError(signal);
 		}
 	})();
 
-	await Promise.all([rotectorPromise, nonRotectorPromise]);
+	await Promise.all([systemPromise, customPromise]);
 
 	if (signal?.aborted) throw getAbortError(signal);
 
@@ -297,7 +307,7 @@ export function countCustomApiFlags<T extends UserStatus | GroupStatus>(
 ): number {
 	let count = 0;
 	for (const [apiId, result] of combined.entries()) {
-		if (apiId === ROTECTOR_API_ID) continue;
+		if (apiId.startsWith('system-')) continue;
 		if (isActionableResult(result)) count++;
 	}
 	return count;
@@ -314,20 +324,32 @@ export function pickDefaultTab<T extends UserStatus | GroupStatus>(
 	const allSettled = values.every((result) => !result.loading);
 	if (!allSettled) return null;
 
-	const rotector = combined.get(ROTECTOR_API_ID);
+	// Prefer first system API that has data, in priority order: SIGMANET > RAB > TASE
+	const systemOrder = ['system-scsn', 'system-rab', 'system-tase'];
+	for (const id of systemOrder) {
+		const result = combined.get(id);
+		if (result && 'data' in result && result.data) return id;
+	}
+
+	// Fall back to first custom API with a detection
 	const firstCustomWithDetection = [...combined.entries()].find(
 		([id, result]) =>
-			id !== ROTECTOR_API_ID && result.data && result.data.flagType !== STATUS.FLAGS.SAFE
+			!id.startsWith('system-') && result.data && result.data.flagType !== STATUS.FLAGS.SAFE
 	);
 
-	// Prefer a custom API that flagged the entity whenever Rotector has nothing to show — SAFE
-	// or unreachable — so the detection is not hidden behind an empty or errored tab.
-	if (
-		firstCustomWithDetection &&
-		(!rotector?.data || rotector.data.flagType === STATUS.FLAGS.SAFE)
-	) {
+	if (firstCustomWithDetection) {
 		return firstCustomWithDetection[0];
 	}
 
-	return ROTECTOR_API_ID;
+	// Fall back to first system API (even if no data)
+	for (const id of SYSTEM_API_IDS) {
+		if (combined.has(id)) return id;
+	}
+
+	// Fall back to first custom API
+	for (const [id] of combined.entries()) {
+		if (!id.startsWith('system-')) return id;
+	}
+
+	return null;
 }

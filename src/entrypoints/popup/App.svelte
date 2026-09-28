@@ -147,7 +147,7 @@
 
 	const theme = themeManager.effectiveTheme;
 	const logoSrc = $derived(
-		$theme === 'dark' ? '/assets/rotector-logo-dark.webp' : '/assets/rotector-logo-light.webp'
+		$theme === 'dark' ? '/assets/roprotect-logo-dark.webp' : '/assets/roprotect-logo-light.webp'
 	);
 </script>
 
@@ -164,8 +164,8 @@
 		<div class="pb-2 text-center">
 			<div class="mb-2 flex justify-center">
 				<img
-					class="h-20 object-contain inline-auto max-inline-[260px]"
-					alt="Rotector"
+					class="object-contin h-20 inline-auto max-inline-[260px]"
+					alt="RoProtect"
 					src={logoSrc}
 				/>
 			</div>

@@ -4,7 +4,6 @@
 	import SiDiscord from '@icons-pack/svelte-simple-icons/icons/SiDiscord';
 	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
-	import { LEGAL_URLS } from '@/lib/types/constants';
 	import { setStorage } from '@/lib/utils/storage';
 
 	async function handleViewGuide() {
@@ -15,17 +14,17 @@
 
 <div class="footer-container">
 	<div class="footer-link-row">
-		<ExtLink class="footer-link" href="https://discord.gg/2Cn7kXqqhY">
+		<ExtLink class="footer-link" href="https://discord.gg/ZwJbrWHPVz">
 			<SiDiscord class="footer-link-icon" size={14} />
 			{$_('footer_discord')}
 		</ExtLink>
 		<span class="footer-link-dot">&middot;</span>
-		<ExtLink class="footer-link" href="https://github.com/robalyx">
+		<ExtLink class="footer-link" href="https://github.com/tlet-sigma/roprotect-extension">
 			<SiGithub class="footer-link-icon" size={14} />
 			{$_('footer_github')}
 		</ExtLink>
 		<span class="footer-link-dot">&middot;</span>
-		<ExtLink class="footer-link" href="https://github.com/robalyx/rotector-extension">
+		<ExtLink class="footer-link" href="https://github.com/tlet-sigma/roprotect-extension">
 			<ExternalLink class="footer-link-icon" />
 			{$_('footer_source_code')}
 		</ExtLink>
@@ -37,21 +36,25 @@
 			{$_('footer_view_guide')}
 		</button>
 		<span class="footer-link-dot">&middot;</span>
-		<ExtLink class="footer-link" href="https://roscoe.rotector.com/docs">
+		<ExtLink class="footer-link" href="https://roprotect.tlet.xyz/docs">
 			<FileText class="footer-link-icon" />
 			{$_('footer_docs')}
 		</ExtLink>
 		<span class="footer-link-dot">&middot;</span>
-		<ExtLink class="footer-link" href="https://rotector.com">
+		<ExtLink class="footer-link" href="https://roprotect.tlet.xyz">
 			<CircleQuestionMark class="footer-link-icon" />
 			{$_('footer_help')}
 		</ExtLink>
 	</div>
 
 	<div class="footer-legal-section">
-		<ExtLink class="footer-legal-link" href={LEGAL_URLS.privacy}>{$_('footer_privacy')}</ExtLink>
+		<ExtLink class="footer-legal-link" href="https://roprotect.tlet.xyz/privacy"
+			>{$_('footer_privacy')}</ExtLink
+		>
 		<span class="footer-legal-divider">|</span>
-		<ExtLink class="footer-legal-link" href={LEGAL_URLS.terms}>{$_('footer_terms')}</ExtLink>
+		<ExtLink class="footer-legal-link" href="https://roprotect.tlet.xyz/terms"
+			>{$_('footer_terms')}</ExtLink
+		>
 	</div>
 
 	<p class="footer-credit">{$_('footer_made_by')}</p>

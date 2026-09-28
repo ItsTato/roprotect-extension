@@ -1,46 +1,29 @@
 import { derived, writable } from 'svelte/store';
-import { settings, updateSetting } from './settings';
+import { settings } from './settings';
 import { SETTINGS_KEYS } from '../types/settings';
-import { REQUIRED_LEGAL_VERSION } from '../types/constants';
-import { compareVersions } from '../utils/version';
 
-const forceShowLegalModal = writable(false);
+const forceShowApiKeyModal = writable(false);
 
-export const legalNeedsAcceptance = derived(
-	settings,
-	($settings) =>
-		compareVersions(REQUIRED_LEGAL_VERSION, $settings[SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION]) > 0
-);
+export const hasApiKey = derived(settings, ($settings) => {
+	// Check if user has entered an API key (stored in settings)
+	return !!$settings[SETTINGS_KEYS.API_KEY].trim();
+});
 
-export const shouldShowLegalModal = derived(
-	[legalNeedsAcceptance, settings, forceShowLegalModal],
-	([$needs, $settings, $force]) => {
-		if ($force) return $needs;
-		if (!$settings[SETTINGS_KEYS.ONBOARDING_COMPLETED]) return false;
-		if ($settings[SETTINGS_KEYS.LEGAL_DECLINED]) return false;
-		return $needs;
+export const shouldShowApiKeyModal = derived(
+	[hasApiKey, forceShowApiKeyModal],
+	([$hasKey, $force]) => {
+		if ($force) return !$hasKey;
+		// Show API key modal if user hasn't entered a key yet
+		return !$hasKey;
 	}
 );
 
-export const extensionFeaturesEnabled = derived(
-	[legalNeedsAcceptance, settings],
-	([$needs, $settings]) => $settings[SETTINGS_KEYS.ONBOARDING_COMPLETED] && !$needs
-);
+export const extensionFeaturesEnabled = derived(hasApiKey, ($hasKey) => $hasKey);
 
-// Records the accepted version, clears any prior decline, and dismisses the forced review
-export async function acceptLegal(): Promise<void> {
-	await updateSetting(SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION, REQUIRED_LEGAL_VERSION);
-	await updateSetting(SETTINGS_KEYS.LEGAL_DECLINED, false);
-	forceShowLegalModal.set(false);
+export async function acceptApiKey(): Promise<void> {
+	forceShowApiKeyModal.set(false);
 }
 
-export async function declineLegal(): Promise<void> {
-	await updateSetting(SETTINGS_KEYS.LEGAL_DECLINED, true);
-	forceShowLegalModal.set(false);
-}
-
-// Forces the legal modal open by clearing the decline flag and setting the in-memory force toggle
-export async function triggerLegalReview(): Promise<void> {
-	await updateSetting(SETTINGS_KEYS.LEGAL_DECLINED, false);
-	forceShowLegalModal.set(true);
+export async function triggerApiKeyEntry(): Promise<void> {
+	forceShowApiKeyModal.set(true);
 }

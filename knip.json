@@ -7,9 +7,18 @@
 		"src/entrypoints/popup/main.ts",
 		"src/entrypoints/options/main.ts",
 		"src/components/popup/developer/PerformanceDashboard.svelte",
-		"src/components/popup/options/api/CustomApiDocumentation.svelte"
+		"src/components/popup/options/api/CustomApiDocumentation.svelte",
+		"src/components/**/*.svelte",
+		"src/lib/controllers/**/*.ts",
+		"src/lib/data/**/*.ts",
+		"src/lib/render/**/*.ts",
+		"src/lib/schemas/**/*.ts",
+		"src/lib/services/**/*.ts",
+		"src/lib/stores/**/*.ts",
+		"src/lib/types/**/*.ts",
+		"src/lib/utils/**/*.ts"
 	],
-	"project": ["src/**/*.{ts,svelte}", "!src/**/*.d.ts"],
+	"project": ["src/**/*.{ts,svelte}", "!src/**/*.d.ts", "!.kilo/**"],
 	"ignoreDependencies": ["@typescript/native-preview", "dotenv", "lightningcss", "tslib"],
 	"rules": {
 		"files": "error",

@@ -33,3 +33,102 @@
 		}
 	}
 }
+
+/* =================================
+   API KEY ENTRY MODAL
+   ================================= */
+
+@utility api-key-modal-header {
+	@apply mb-4 flex flex-col items-center gap-1.5 text-center;
+}
+
+@utility api-key-logo {
+	@apply object-contain;
+	width: 48px;
+	height: 48px;
+}
+
+@utility api-key-title {
+	@apply m-0 text-lg font-semibold;
+	color: var(--color-text-heading);
+}
+
+@utility api-key-subtitle {
+	@apply m-0 text-center text-sm;
+	color: var(--color-text-subtle);
+	max-width: 100%;
+}
+
+@utility api-key-form {
+	@apply flex flex-col gap-4;
+}
+
+@utility form-group {
+	@apply flex flex-col gap-1.5;
+}
+
+@utility form-label {
+	@apply text-sm font-medium;
+	color: var(--color-text-heading);
+}
+
+@utility input-wrapper {
+	@apply relative flex items-center;
+}
+
+@utility form-input {
+	@apply rounded-sm border px-3 py-2 text-sm inline-full;
+	background-color: var(--color-bg-content);
+	color: var(--color-text);
+	border-color: var(--color-border);
+	font-family: inherit;
+
+	&:focus {
+		@apply ring-2 ring-offset-0 outline-none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+	}
+
+	&:disabled {
+		@apply cursor-not-allowed opacity-60;
+		background-color: var(--color-bg-tertiary);
+	}
+}
+
+@utility toggle-visibility {
+	@apply absolute inline-flex cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-1.5;
+	right: 0.5rem;
+	color: var(--color-text-subtle);
+	transition: color 0.15s ease;
+
+	&:hover {
+		color: var(--color-text);
+	}
+
+	&:focus-visible {
+		@apply ring-2 ring-offset-0 outline-none;
+		color: var(--color-primary);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+	}
+}
+
+@utility form-error {
+	@apply m-0 text-sm;
+	color: var(--color-error);
+}
+
+@utility form-hint {
+	@apply m-0 text-center text-sm;
+	color: var(--color-text-subtle);
+}
+
+@utility hint-link {
+	@apply inline-flex items-center gap-1 font-medium underline;
+	color: var(--color-primary);
+	text-underline-offset: 2px;
+	transition: color 0.15s ease;
+
+	&:hover {
+		color: var(--color-primary-hover);
+	}
+}

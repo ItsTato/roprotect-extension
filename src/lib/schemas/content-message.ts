@@ -28,6 +28,11 @@ const ContentMessageSchema = v.variant('action', [
 		clientId: ClientId
 	}),
 	v.object({
+		action: v.literal(API_ACTIONS.API_WHOAMI),
+		apiKey: v.string(),
+		clientId: ClientId
+	}),
+	v.object({
 		action: v.literal(API_ACTIONS.CHECK_GROUP_STATUS),
 		groupId: UserId,
 		clientId: ClientId

@@ -4,7 +4,7 @@
 	import { sanitizeEntityId } from '@/lib/utils/dom/sanitizer';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
-	import { STATUS, CAPTCHA_MESSAGES, KOFI_URL, type StatusFlag } from '@/lib/types/constants';
+	import { STATUS, CAPTCHA_MESSAGES, type StatusFlag } from '@/lib/types/constants';
 	import { Ban, Check, Clipboard, Clock, Database, Search, User, Users } from '@lucide/svelte';
 	import AckCheckbox from '@/components/ui/AckCheckbox.svelte';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
@@ -450,7 +450,7 @@
 			<p class="queue-misuse-warning-title">{$_('queue_popup_misuse_warning_title')}</p>
 			<p class="queue-misuse-warning-body">
 				{$_('queue_popup_misuse_warning_body')}
-				<ExtLink class="queue-misuse-warning-link" href={KOFI_URL}>
+				<ExtLink class="queue-misuse-warning-link" href="https://discord.gg/ZwJbrWHPVz">
 					{$_('queue_popup_misuse_warning_link')}
 				</ExtLink>
 			</p>

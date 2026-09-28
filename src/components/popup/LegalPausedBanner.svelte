@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { TriangleAlert } from '@lucide/svelte';
-	import { legalNeedsAcceptance } from '@/lib/stores/legal';
+	import { shouldShowApiKeyModal } from '@/lib/stores/legal';
 	import { setStorage } from '@/lib/utils/storage';
 
 	async function handleReview() {
@@ -10,7 +10,7 @@
 	}
 </script>
 
-{#if $legalNeedsAcceptance}
+{#if $shouldShowApiKeyModal}
 	<div class="legal-paused-banner" role="alert">
 		<TriangleAlert class="legal-paused-icon" size={18} />
 		<div class="legal-paused-text">

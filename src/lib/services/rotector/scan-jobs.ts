@@ -2,9 +2,8 @@ import { fetchAllFriendIds } from '../roblox/friends';
 import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
 import { queryMultipleUsers } from './unified-query';
-import { ROTECTOR_API_ID } from '../../stores/custom-apis';
 import type { UserStatus } from '../../types/api';
-import type { CombinedStatus } from '../../types/custom-api';
+import type { CombinedStatus, CustomApiResult } from '../../types/custom-api';
 import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
 import {
 	calculateStatusBadges,
@@ -28,6 +27,8 @@ export type ScanCategory =
 	| 'unknown'
 	| 'safe';
 export type ScanCounts = Map<ScanCategory, number>;
+
+const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
 
 function flagToCategory(flagType: number): ScanCategory {
 	switch (flagType) {
@@ -67,16 +68,28 @@ interface ScanBucket {
 	fromIntegration: boolean;
 }
 
+// Get the first system API result that has data
+function getSystemApiResult(
+	combined: CombinedStatus<UserStatus>
+): Pick<CustomApiResult<UserStatus>, 'data' | 'error' | 'loading'> | null {
+	for (const id of SYSTEM_API_IDS) {
+		const result = combined.get(id);
+		if (result) return { data: result.data, error: result.error, loading: result.loading };
+	}
+	return null;
+}
+
 // Picks one bucket per friend, applying outfit/queued overrides. Custom APIs are bucketed by the
-// severity they actually reported instead of a single catch-all, but a non-flagged Rotector
+// severity they actually reported instead of a single catch-all, but a non-flagged system API
 // verdict never masks a partner's detection.
 function combinedResultToCategory(combined: CombinedStatus<UserStatus>): ScanBucket {
-	const data = combined.get(ROTECTOR_API_ID)?.data;
+	const systemResult = getSystemApiResult(combined);
+	const data = systemResult?.data;
 	const customFlagType = pickHighestSeverityCustomFlag(combined);
 	const customCategory = customFlagType === null ? null : flagToCategory(customFlagType);
 	const fromIntegration = customCategory !== null;
 
-	// Rotector unreachable: still surface custom-API detections rather than dropping the entity,
+	// System APIs unreachable: still surface custom-API detections rather than dropping the entity,
 	// which would both hide the only available signal and shrink the scan total.
 	if (!data) {
 		return { category: customCategory, fromIntegration };
@@ -130,8 +143,10 @@ export async function scanFriendsForUser(
 			lookupContext,
 			signal,
 			onUpdate: (friendId, combined) => {
-				const r = combined.get(ROTECTOR_API_ID);
-				if (!r || r.loading || completed.has(friendId)) return;
+				// Track completion when any system API resolves
+				const systemResult =
+					combined.get('system-scsn') ?? combined.get('system-rab') ?? combined.get('system-tase');
+				if (!systemResult || systemResult.loading || completed.has(friendId)) return;
 				completed.add(friendId);
 				const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
 				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));

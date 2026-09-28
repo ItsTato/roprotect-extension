@@ -2,8 +2,6 @@
 	import { loadStats, statsRange } from '@/lib/stores/stats';
 	import { STATS_POLL_INTERVAL } from '@/lib/types/stats';
 	import ActivitySection from './ActivitySection.svelte';
-	import ChangelogCompactRow from './ChangelogCompactRow.svelte';
-	import FundingSection from './FundingSection.svelte';
 	import QueueLimitsDisplay from '@/components/features/queue/QueueLimitsDisplay.svelte';
 	import TotalsBand from './TotalsBand.svelte';
 
@@ -27,12 +25,4 @@
 	<div class="popup-divider"></div>
 
 	<QueueLimitsDisplay />
-
-	<div class="popup-divider"></div>
-
-	<FundingSection />
-
-	<div class="popup-divider"></div>
-
-	<ChangelogCompactRow />
 </div>

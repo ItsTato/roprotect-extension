@@ -1,6 +1,6 @@
+import { API_ACTIONS } from '@/lib/types/constants';
 import type { MembershipBadgeUpdatePayload, MeSettingsPatch } from '@/lib/types/api';
 import type { ContentMessage } from '@/lib/schemas/content-message';
-import { API_ACTIONS } from '@/lib/types/constants';
 import {
 	getUnprocessedUserIdsFromStorage,
 	isUserBeingProcessedInStorage
@@ -26,7 +26,7 @@ import {
 	getMembershipVerification,
 	updateMembershipBadge
 } from './endpoints/extension';
-import { customApiCheckUser, customApiCheckMultipleUsers } from './endpoints/custom';
+import { customApiCheckUser, customApiCheckMultipleUsers, apiWhoami } from './endpoints/custom';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
 import {
@@ -67,7 +67,7 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 				return customApiCheckMultipleUsers(msg.apiConfig, msg.userIds);
 			}
 			// Use primary database if any user is queued but not yet processed
-			const userIds = msg.userIds.map((id) =>
+			const userIds = msg.userIds.map((id: string | number) =>
 				typeof id === 'string' ? Number.parseInt(id, 10) : id
 			);
 			const unprocessed = await getUnprocessedUserIdsFromStorage(userIds);
@@ -201,6 +201,9 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		}
 		case API_ACTIONS.GET_LEADERBOARD: {
 			return getLeaderboard(msg.window, msg.limit, msg.cursor);
+		}
+		case API_ACTIONS.API_WHOAMI: {
+			return apiWhoami(msg.apiKey);
 		}
 	}
 }

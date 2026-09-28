@@ -20,15 +20,7 @@ const StatTotalsSchema = v.object({
 	groupsConfirmed: v.number(),
 	groupsFlagged: v.number(),
 	groupsMixed: v.number(),
-	groupsLocked: v.number(),
-	votesCast: v.number(),
-	queuedUsers: v.number()
-});
-
-const FundingSnapshotSchema = v.object({
-	donations: v.number(),
-	goal: v.number(),
-	remaining: v.number()
+	groupsLocked: v.number()
 });
 
 const ActivityDataSchema = v.object({
@@ -38,7 +30,6 @@ const ActivityDataSchema = v.object({
 
 export const StatsResponseSchema = v.object({
 	totals: StatTotalsSchema,
-	funding: FundingSnapshotSchema,
 	activity: ActivityDataSchema
 });
 
