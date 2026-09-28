@@ -74,19 +74,7 @@ const ContentMessageSchema = v.variant('action', [
 		clientId: ClientId
 	}),
 	v.object({
-		action: v.literal(API_ACTIONS.SUBMIT_VOTE),
-		userId: UserId,
-		voteType: v.number(),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_VOTES),
-		userId: UserId,
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_STATS),
-		hours: v.picklist([24, 168, 720]),
+		action: v.literal(API_ACTIONS.GET_USAGE),
 		clientId: ClientId
 	}),
 	v.object({
@@ -158,59 +146,6 @@ const ContentMessageSchema = v.variant('action', [
 	}),
 	v.object({
 		action: v.literal(API_ACTIONS.REQUEST_TRANSLATE_PERMISSION),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_CHALLENGE),
-		robloxUserId: v.pipe(v.number(), v.minValue(1)),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_VERIFY),
-		challengeId: v.string(),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_EXCHANGE),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_LOGOUT),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_LOGOUT_ALL),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_GET_PROFILE),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_UPDATE_SETTINGS),
-		alias: v.optional(v.nullable(v.string())),
-		showUsername: v.optional(v.boolean()),
-		showThumbnail: v.optional(v.boolean()),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_REFRESH_IDENTITY),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_LIST_SESSIONS),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_REVOKE_SESSION),
-		sessionId: v.pipe(v.string(), v.regex(/^[0-9a-f]{12}$/)),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_LEADERBOARD),
-		window: v.picklist(['daily', 'weekly', 'monthly', 'yearly', 'all_time']),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100))),
-		cursor: v.optional(v.pipe(v.number(), v.minValue(0))),
 		clientId: ClientId
 	})
 ]);

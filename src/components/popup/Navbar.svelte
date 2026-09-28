@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
-	import { unprocessedCount } from '@/lib/stores/queue-history';
 
-	type NavPage = 'stats' | 'settings' | 'queue' | 'leaderboard';
+	type NavPage = 'stats' | 'settings';
 
 	interface NavbarProps {
 		currentPage: string | null;
@@ -13,8 +12,6 @@
 
 	const tabs: { id: NavPage; labelKey: string }[] = [
 		{ id: 'stats', labelKey: 'navbar_tab_stats' },
-		{ id: 'queue', labelKey: 'navbar_tab_queue' },
-		{ id: 'leaderboard', labelKey: 'navbar_tab_leaderboard' },
 		{ id: 'settings', labelKey: 'navbar_tab_settings' }
 	];
 </script>
@@ -29,9 +26,6 @@
 			type="button"
 		>
 			{$_(labelKey)}
-			{#if id === 'queue' && $unprocessedCount > 0}
-				<span class="navbar-tab-count">{$unprocessedCount}</span>
-			{/if}
 		</button>
 	{/each}
 </nav>

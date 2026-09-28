@@ -10,8 +10,8 @@
 
 	const LOGOS = {
 		rotector: {
-			light: getAssetUrl('/assets/rotector-logo-light.webp'),
-			dark: getAssetUrl('/assets/rotector-logo-dark.webp')
+			light: getAssetUrl('/assets/roprotect-logo-light.webp'),
+			dark: getAssetUrl('/assets/roprotect-logo-dark.webp')
 		},
 		rayward: {
 			light: getAssetUrl('/assets/rayward-logo-light.webp'),
@@ -19,7 +19,7 @@
 		}
 	} as const;
 
-	const NAMES = { rotector: 'Rotector', rayward: 'Rayward' } as const;
+	const NAMES = { rotector: 'RoProtect', rayward: 'Rayward' } as const;
 
 	const effectiveTheme = themeManager.effectiveTheme;
 	const logoUrl = $derived($effectiveTheme === 'dark' ? LOGOS[app].dark : LOGOS[app].light);

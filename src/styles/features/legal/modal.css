@@ -44,8 +44,8 @@
 
 @utility api-key-logo {
 	@apply object-contain;
-	width: 48px;
-	height: 48px;
+	width: 160px;
+	height: 160px;
 }
 
 @utility api-key-title {

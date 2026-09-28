@@ -35,6 +35,7 @@
 		observeProfileBlur
 	} from '@/lib/services/blur/profile';
 	import { isFlagged } from '@/lib/utils/status/status-utils';
+	import { getRotectorMembershipBadge } from '@/lib/utils/status/status-projection';
 	import { detectEncoding } from '@/lib/services/cipher/encoding-detector';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
@@ -49,7 +50,6 @@
 	import FriendsScanBar from '../friends/FriendsScanBar.svelte';
 	import GroupsScanBar from '../groups/GroupsScanBar.svelte';
 	import CipherIndicator from '../cipher/CipherIndicator.svelte';
-	import { RO_PROTECT_API_ID } from '@/lib/stores/custom-apis';
 
 	interface Props {
 		userId: string;
@@ -329,11 +329,9 @@
 		membershipPillSignature = null;
 	}
 
-	// Read the Rotector entry directly so the pill tracks the canonical badge even
-	// when a non-Rotector custom-API tab is active in the tooltip
-	const rotectorMembershipBadge = $derived(
-		userStatus?.get(RO_PROTECT_API_ID)?.data?.membershipBadge ?? null
-	);
+	// Read the membership badge across the system providers directly so the pill tracks the
+	// canonical badge even when a non-Rotector custom-API tab is active in the tooltip
+	const rotectorMembershipBadge = $derived(getRotectorMembershipBadge(userStatus));
 
 	// Mount the pill once the profile status container is in the DOM and unmount when
 	// the badge disappears (sign-out, downgrade) so stale DOM doesn't linger

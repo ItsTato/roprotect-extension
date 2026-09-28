@@ -538,8 +538,6 @@
 				>{step2Parts[1]}
 			</li>
 			<li>{$_('membership_step_3')}</li>
-			<li>{$_('membership_step_4')}</li>
-			<li>{$_('membership_step_5')}</li>
 		</ol>
 		<div class="membership-cta-row">
 			{#each ctaRows as cta (cta.variant)}

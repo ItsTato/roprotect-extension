@@ -1,11 +1,5 @@
 <script lang="ts">
-	import {
-		ENTITY_TYPES,
-		REASON_KEYS,
-		STATUS,
-		type StatusFlag,
-		type VoteType
-	} from '@/lib/types/constants';
+	import { ENTITY_TYPES, REASON_KEYS, STATUS, type StatusFlag } from '@/lib/types/constants';
 	import {
 		getCategoryTextKey,
 		MIXED_GROUP,
@@ -26,7 +20,6 @@
 		getRotectorMembershipBadge,
 		getRotectorOutfitEvidence
 	} from '@/lib/utils/status/status-projection';
-	import { getVoteState, loadVoteData, submitVoteData } from '@/lib/services/third-party/vote-data';
 	import { useTooltipTranslation } from './useTooltipTranslation.svelte';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
@@ -81,7 +74,6 @@
 	} from '@lucide/svelte';
 	import LoadingSpinner from '../ui/LoadingSpinner.svelte';
 	import CanvasText from '../ui/CanvasText.svelte';
-	import VotingWidget from './VotingWidget.svelte';
 	import DiscordAccountsEvidence from './DiscordAccountsEvidence.svelte';
 	import OutfitSnapshotLightbox from '../features/outfit/OutfitSnapshotLightbox.svelte';
 	import TooltipTabs from './TooltipTabs.svelte';
@@ -280,12 +272,6 @@
 
 	const sanitizedUserId = $derived(sanitizeEntityId(userId) ?? '');
 
-	const voteState = $derived(getVoteState(sanitizedUserId));
-	const voteData = $derived(voteState.data);
-	const loadingVotes = $derived(voteState.loading);
-	const voteError = $derived(voteState.error);
-	const voteAccessDenied = $derived(voteState.accessDenied);
-
 	const isGroup = $derived(entityType === ENTITY_TYPES.GROUP);
 
 	const activeUserStatus = $derived.by(() => {
@@ -309,20 +295,6 @@
 					.toSorted()
 					.join('\u0000')
 			: ''
-	);
-
-	const VOTABLE_FLAGS: readonly StatusFlag[] = [
-		STATUS.FLAGS.UNSAFE,
-		STATUS.FLAGS.PENDING,
-		STATUS.FLAGS.MIXED
-	];
-
-	const shouldShowVoting = $derived(
-		!isGroup &&
-			!voteAccessDenied &&
-			isSystemApiTab(activeTab) && // Only show voting on system API tabs
-			activeUserStatus &&
-			VOTABLE_FLAGS.includes(activeUserStatus.flagType)
 	);
 
 	const isSafeUserWithQueueOnly = $derived(
@@ -354,18 +326,6 @@
 	);
 
 	let showSafeReasons = $state(false);
-
-	// 3-day cooldown after processing
-	const queueCooldownInfo = $derived.by(() => {
-		if (!activeUserStatus?.processedAt) return { isInCooldown: false, daysRemaining: 0 };
-		const daysSinceProcessed = getDaysSinceTimestamp(activeUserStatus.processedAt);
-		const rawRemaining = 3 - daysSinceProcessed;
-		const daysRemaining = Math.max(0, Math.ceil(rawRemaining));
-		return {
-			isInCooldown: rawRemaining > 0,
-			daysRemaining
-		};
-	});
 
 	const isExpanded = $derived(mode === 'expanded');
 
@@ -760,14 +720,6 @@
 		};
 	}
 
-	function handleVoteSubmit(voteType: VoteType) {
-		void submitVoteData(sanitizedUserId, voteType);
-	}
-
-	function handleQueueSubmit() {
-		onQueue?.();
-	}
-
 	function handleReprocessRequest(event: MouseEvent) {
 		event.stopPropagation();
 		onQueue?.(true, activeUserStatus);
@@ -1131,11 +1083,6 @@
 	});
 
 	$effect(() => {
-		if (!shouldShowVoting) return;
-		void loadVoteData(sanitizedUserId);
-	});
-
-	$effect(() => {
 		if (!flaggedOutfitNamesKey) return;
 		void loadOutfitSnapshots();
 	});
@@ -1426,27 +1373,6 @@
 					{/if}
 				{/if}
 
-				<div class="mt-2 flex gap-2">
-					{#if queueCooldownInfo.isInCooldown}
-						<button class="queue-button queue-button-disabled inline-full" disabled type="button">
-							{$_('tooltip_queue_cooldown', {
-								values: { 0: queueCooldownInfo.daysRemaining.toString() }
-							})}
-						</button>
-					{:else}
-						<button
-							class="queue-button inline-full"
-							onclick={(e) => {
-								e.stopPropagation();
-								handleQueueSubmit();
-							}}
-							type="button"
-						>
-							{$_('tooltip_queue_button')}
-						</button>
-					{/if}
-				</div>
-
 				<!-- Queue timing information -->
 				{@render metadataSection()}
 			{:else}
@@ -1454,20 +1380,9 @@
 
 				{@render customBadgesSection()}
 
-				<!-- Voting widget for unsafe/pending users -->
-				{#if shouldShowVoting}
-					<VotingWidget
-						confirmed={activeUserStatus?.flagType === STATUS.FLAGS.UNSAFE}
-						error={voteError}
-						loading={loadingVotes}
-						onVote={handleVoteSubmit}
-						{voteData}
-					/>
-				{/if}
-
 				{#if reasonEntries.length > 0}
 					<!-- Show divider if there's content above -->
-					{#if shouldShowVoting || customApiBadges.length > 0}
+					{#if customApiBadges.length > 0}
 						<div class="tooltip-divider"></div>
 					{/if}
 

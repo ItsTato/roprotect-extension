@@ -29,8 +29,13 @@ const UserStatusResponseSchema = v.object({
 	),
 	category: v.optional(v.number('Invalid "category" field (must be number if present)')),
 	confidence: v.optional(v.number('Invalid "confidence" field (must be number if present)')),
-	reasons: v.optional(
-		v.record(v.string(), v.unknown(), 'Invalid "reasons" field (must be object)')
+	// A record with no reasons omits the key entirely, and the contract also permits an
+	// explicit null, so normalise both to an empty object. The `optional` default covers
+	// the absent case, the transform covers an explicit null, and doing it at the parse
+	// boundary keeps downstream projection free of per-access null checks.
+	reasons: v.pipe(
+		v.optional(v.nullish(v.record(v.string(), v.unknown(), 'Invalid "reasons" field')), {}),
+		v.transform((value) => value ?? {})
 	),
 	badges: v.optional(
 		v.pipe(
@@ -72,7 +77,10 @@ const ImportedApiConfigSchema = v.object({
 	landscapeImageDataUrl: v.optional(
 		v.pipe(
 			v.string('landscapeImageDataUrl must be a string'),
-			v.startsWith('data:image/', 'landscapeImageDataUrl must be an inline data:image/ URL')
+			v.regex(
+				/^(data:image\/|chrome-extension:\/\/)/,
+				'landscapeImageDataUrl must be a data:image/ or chrome-extension:// URL'
+			)
 		)
 	),
 	authHeaderType: v.optional(
@@ -96,7 +104,15 @@ export const PersistedCustomApiSchema = v.object({
 	lastTestSuccess: v.optional(v.boolean()),
 	isSystem: v.optional(v.boolean()),
 	reasonFormat: v.optional(v.picklist(REASON_FORMATS)),
-	landscapeImageDataUrl: v.optional(v.pipe(v.string(), v.startsWith('data:image/'))),
+	landscapeImageDataUrl: v.optional(
+		v.pipe(
+			v.string(),
+			v.regex(
+				/^(data:image\/|chrome-extension:\/\/)/,
+				'landscapeImageDataUrl must be a data:image/ or chrome-extension:// URL'
+			)
+		)
+	),
 	apiKey: v.optional(v.string()),
 	authHeaderType: v.optional(v.picklist(AUTH_HEADER_TYPES))
 });

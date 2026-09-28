@@ -11,12 +11,11 @@ import {
 } from '../utils/permissions';
 import { asApiError } from '../utils/api/api-error';
 import { testCustomApiConnection } from '../services/custom-api-test';
-import { getAssetUrl } from '../utils/assets';
-import type { PublicPath } from 'wxt/browser';
-import { getStorage, setStorage } from '../utils/storage';
+import { getAllStorage, getStorage, setStorage } from '../utils/storage';
 import { generateLocalId } from '../utils/id';
 import { parsePersistedCustomApis } from '../schemas/custom-api';
 import { apiClient } from '../services/rotector/api-client';
+import { getAssetUrl } from '../utils/assets';
 
 export const MAX_CUSTOM_APIS = 5;
 
@@ -29,9 +28,9 @@ const SERVICE_LABELS: Record<string, string> = {
 	tase: 'TASE'
 };
 const SERVICE_IMAGES: Record<(typeof SERVICE_ORDER)[number], string> = {
-	scsn: '/assets/sigmanet-dark.png',
-	rab: '/assets/rab.webp',
-	tase: '/assets/tase.webp'
+	scsn: getAssetUrl('/assets/sigmanet-dark.png'),
+	rab: getAssetUrl('/assets/rab.webp'),
+	tase: getAssetUrl('/assets/tase.webp')
 };
 
 interface WhoamiData {
@@ -53,9 +52,17 @@ function generateCustomApiId(): string {
 // Loads APIs from storage, and if API key is present, loads services from whoami
 export async function loadCustomApis(): Promise<void> {
 	const stored = await getStorage<unknown>('local', SETTINGS_KEYS.CUSTOM_APIS, undefined);
-	const settings = await getStorage<Record<string, unknown>>('local', 'settings', {});
+	const allSync = await getAllStorage('sync');
+	const settings = allSync;
 
 	const apiKey = (settings[SETTINGS_KEYS.API_KEY] as string | undefined)?.trim();
+
+	logger.debug('[loadCustomApis] Storage state:', {
+		hasApiKey: !!apiKey,
+		apiKeyLength: apiKey?.length ?? 0,
+		storedKeys: Object.keys(settings),
+		allSyncKeys: Object.keys(allSync)
+	});
 
 	if (stored === undefined) {
 		await setStorage('local', SETTINGS_KEYS.CUSTOM_APIS, []);
@@ -66,11 +73,14 @@ export async function loadCustomApis(): Promise<void> {
 	if (stored !== undefined) {
 		try {
 			userApis = parsePersistedCustomApis(stored);
+			// Filter out old system APIs (they'll be recreated fresh from whoami)
+			userApis = userApis.filter((api) => !api.isSystem && !api.id.startsWith('system-'));
 		} catch (error) {
 			logger.warn('Stored custom APIs failed validation; resetting to empty list:', {
 				issues: v.isValiError(error) ? v.summarize(error.issues) : String(error)
 			});
 			await setStorage('local', SETTINGS_KEYS.CUSTOM_APIS, []);
+			userApis = [];
 		}
 	}
 
@@ -80,12 +90,22 @@ export async function loadCustomApis(): Promise<void> {
 		try {
 			// Fetch services from whoami
 			const response = await apiClient.whoami(apiKey);
-			if (response.success && response.data) {
-				systemApis = createSystemApisFromWhoami(response.data as WhoamiData, apiKey);
+			const whoamiData = response.data as WhoamiData | undefined;
+			logger.debug('[loadCustomApis] whoami response:', {
+				success: response.success,
+				hasData: !!response.data,
+				error: response.error,
+				dataServices: whoamiData?.services,
+				dataEndpoints: whoamiData?.endpoints ? Object.keys(whoamiData.endpoints) : null
+			});
+			if (response.success && whoamiData) {
+				systemApis = createSystemApisFromWhoami(whoamiData, apiKey);
 			}
 		} catch (error) {
 			logger.error('Failed to load services from whoami:', error);
 		}
+	} else {
+		logger.debug('[loadCustomApis] No API key found in sync storage');
 	}
 
 	const allApis = [...systemApis, ...userApis];
@@ -93,27 +113,56 @@ export async function loadCustomApis(): Promise<void> {
 	logger.debug('Loaded APIs:', {
 		total: allApis.length,
 		system: systemApis.length,
-		user: userApis.length
+		user: userApis.length,
+		systemApiIds: systemApis.map((a) => a.id)
 	});
 }
 
 function createSystemApisFromWhoami(whoami: WhoamiData, apiKey: string): CustomApiConfig[] {
-	return SERVICE_ORDER.filter((id) => whoami.services.includes(id)).map((id, index) => ({
-		id: `system-${id}`,
-		name: SERVICE_LABELS[id] ?? 'Unknown',
-		singleUrl:
-			whoami.endpoints[id]?.single ?? `https://roprotect.tlet.xyz/v1/${id}/v1/lookup/user/{userId}`,
-		batchUrl: whoami.endpoints[id]?.batch ?? `https://roprotect.tlet.xyz/v1/${id}/v1/lookup/users`,
-		enabled: true,
-		timeout: API_CONFIG.TIMEOUT,
-		order: index,
-		createdAt: 0,
-		isSystem: true,
-		reasonFormat: 'numeric',
-		landscapeImageDataUrl: getAssetUrl(SERVICE_IMAGES[id] as PublicPath),
-		apiKey,
-		authHeaderType: 'x-auth-token' as const
-	}));
+	logger.debug('[createSystemApisFromWhoami] whoami endpoints:', {
+		endpointKeys: Object.keys(whoami.endpoints),
+		endpoints: whoami.endpoints
+	});
+
+	// whoami reports each service's lookup URL, which may be an absolute URL or a path
+	// relative to the host that served whoami. fetch() cannot resolve a bare path in a
+	// service worker, so anchor anything host-relative to the API origin first.
+	// The path is joined as a string rather than through `new URL()` because that
+	// percent-encodes the literal `{userId}` placeholder into `%7BuserId%7D`, which
+	// would stop customApiCheckUser from substituting the real ID.
+	const resolveEndpoint = (value: string | undefined, fallbackPath: string): string => {
+		const raw = (value ?? fallbackPath).trim();
+		if (/^https?:\/\//i.test(raw)) {
+			return raw;
+		}
+		const { origin } = new URL(`${API_CONFIG.BASE_URL}/`);
+		return `${origin}${raw.startsWith('/') ? '' : '/'}${raw}`;
+	};
+
+	return SERVICE_ORDER.filter((id) => whoami.services.includes(id)).map((id, index) => {
+		const endpoint = whoami.endpoints[id];
+		const singleUrl = resolveEndpoint(endpoint?.single, `/v1/${id}/v1/lookup/user/{userId}`);
+		const batchUrl = resolveEndpoint(endpoint?.batch, `/v1/${id}/v1/lookup/users`);
+		logger.debug(`[createSystemApisFromWhoami] Service ${id} endpoint:`, {
+			single: singleUrl,
+			batch: batchUrl
+		});
+		return {
+			id: `system-${id}`,
+			name: SERVICE_LABELS[id] ?? 'Unknown',
+			singleUrl,
+			batchUrl,
+			enabled: true,
+			timeout: API_CONFIG.TIMEOUT,
+			order: index,
+			createdAt: 0,
+			isSystem: true,
+			reasonFormat: 'numeric',
+			landscapeImageDataUrl: SERVICE_IMAGES[id],
+			apiKey,
+			authHeaderType: 'x-auth-token' as const
+		};
+	});
 }
 
 async function saveCustomApis(apis: CustomApiConfig[]): Promise<void> {

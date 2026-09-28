@@ -1,7 +1,6 @@
 import type { CombinedStatus, CustomApiConfig, CustomApiResult } from '../../types/custom-api';
 import type { GroupStatus, UserStatus } from '../../types/api';
 import { apiClient } from './api-client';
-import { userStatusService } from './entity-status';
 import { customApis } from '../../stores/custom-apis';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { settings } from '../../stores/settings';
@@ -11,10 +10,14 @@ import { startTrace } from '../../utils/logging/perf-tracer';
 import { TRACE_CATEGORIES } from '../../types/performance';
 import { chunkArray } from '../../utils/array';
 import { abortableSleep, getAbortError } from '../../utils/abort';
+import { parseUserStatus } from '../../schemas/rotector';
 import { asApiError } from '../../utils/api/api-error';
 import { API_CONFIG, LOOKUP_CONTEXT, STATUS } from '../../types/constants';
 import { SETTINGS_KEYS } from '../../types/settings';
-import { isActionableResult } from '../../utils/status/status-utils';
+import {
+	isActionableResult,
+	pickHighestSeveritySystemResult
+} from '../../utils/status/status-utils';
 import { get } from 'svelte/store';
 
 interface QueryMultipleUsersOptions {
@@ -73,6 +76,25 @@ export function queryUserProgressive(
 	const enabledApis = getEnabledCustomApis();
 	const controller = new AbortController();
 
+	// Handle case where no APIs are enabled - return a "no APIs" status
+	if (enabledApis.length === 0) {
+		const noApisStatus = new Map<string, CustomApiResult<UserStatus>>([
+			[
+				'no-apis',
+				{
+					apiId: 'no-apis',
+					apiName: 'No APIs Configured',
+					error: 'No APIs available. Enter your RoProtect API key in the extension settings.',
+					loading: false,
+					timestamp: Date.now(),
+					landscapeImageDataUrl: ''
+				}
+			]
+		]);
+		onUpdate(noApisStatus);
+		return () => controller.abort();
+	}
+
 	const apiResults = new Map<string, CustomApiResult<UserStatus>>(
 		enabledApis.map((api) => [
 			api.id,
@@ -99,16 +121,14 @@ export function queryUserProgressive(
 			landscapeImageDataUrl: api.landscapeImageDataUrl
 		};
 		try {
-			const result = api.isSystem
-				? await userStatusService.getStatus(userId, { signal: apiSignal })
-				: await apiClient.checkUser(userId, {
-						apiConfig: api,
-						signal: apiSignal
-					});
+			const result = await apiClient.checkUser(userId, {
+				apiConfig: api,
+				signal: apiSignal
+			});
 
 			if (controller.signal.aborted) return;
 
-			apiResults.set(api.id, { ...base, data: result ?? undefined });
+			apiResults.set(api.id, { ...base, data: result });
 			onUpdate(new Map(apiResults));
 		} catch (error) {
 			if (controller.signal.aborted) return;
@@ -151,6 +171,24 @@ export async function queryMultipleUsers(
 	});
 	const enabledApis = getEnabledCustomApis();
 
+	// Handle case where no APIs are enabled
+	if (enabledApis.length === 0) {
+		const noApisStatus = new Map<string, CustomApiResult<UserStatus>>([
+			[
+				'no-apis',
+				{
+					apiId: 'no-apis',
+					apiName: 'No APIs Configured',
+					error: 'No APIs available. Enter your RoProtect API key in the extension settings.',
+					loading: false,
+					timestamp: Date.now(),
+					landscapeImageDataUrl: ''
+				}
+			]
+		]);
+		return new Map(userIds.map((userId) => [userId, new Map(noApisStatus)]));
+	}
+
 	const results = new Map<string, CombinedStatus<UserStatus>>();
 	for (const userId of userIds) {
 		results.set(
@@ -190,6 +228,14 @@ export async function queryMultipleUsers(
 	const systemApis = enabledApis.filter(isSystemApi);
 	const customApisList = enabledApis.filter((api) => !isSystemApi(api));
 
+	// A batch response omits users the upstream has no record of. Left unset, that entry
+	// would carry neither data nor error with loading already false, which is
+	// indistinguishable from a request still in flight and leaves the UI on "Checking..."
+	// forever. The single-lookup endpoint reports those same users as flagType SAFE, so
+	// mirror that rather than inventing an error.
+	const resolveBatchEntry = (userId: string, userStatus: UserStatus | undefined): UserStatus =>
+		userStatus ?? parseUserStatus({ id: Number.parseInt(userId, 10), flagType: STATUS.FLAGS.SAFE });
+
 	logger.debug('Unified batch query starting:', {
 		userCount: userIds.length,
 		totalApis: enabledApis.length,
@@ -200,51 +246,48 @@ export async function queryMultipleUsers(
 	const systemPromise = (async () => {
 		if (systemApis.length === 0) return;
 
-		const toFetch: string[] = [];
-		for (const userId of userIds) {
-			const cached = userStatusService.getCachedStatus(userId);
-			if (cached) {
-				// Apply cached status to all system APIs
-				for (const api of systemApis) {
-					setApiResult(userId, api, { data: cached });
-				}
-			} else {
+		// For system APIs, call each API's batch endpoint separately since they have different URLs
+		for (const api of systemApis) {
+			const toFetch: string[] = [];
+			for (const userId of userIds) {
+				// Skip cache for system APIs since they have different endpoints
 				toFetch.push(userId);
 			}
-		}
-		if (toFetch.length === 0) return;
+			if (toFetch.length === 0) continue;
 
-		const processChunk = async (chunk: string[]): Promise<void> => {
-			try {
-				const apiStatuses = await apiClient.checkMultipleUsers(chunk, { signal, lookupContext });
-				if (signal?.aborted) return;
-				const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
-				for (const status of apiStatuses) {
-					userStatusService.updateStatus(status.id.toString(), status);
-				}
-				for (const userId of chunk) {
-					const userStatus = userMap.get(userId);
-					for (const api of systemApis) {
-						setApiResult(userId, api, userStatus ? { data: userStatus } : {});
+			const processChunk = async (chunk: string[]): Promise<void> => {
+				try {
+					const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
+						apiConfig: api,
+						signal,
+						lookupContext
+					});
+					if (signal?.aborted) return;
+					const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
+					for (const userId of chunk) {
+						setApiResult(userId, api, { data: resolveBatchEntry(userId, userMap.get(userId)) });
 					}
-				}
-			} catch (error) {
-				if (signal?.aborted) return;
-				const errorMessage = asApiError(error).message;
-				for (const userId of chunk) {
-					for (const api of systemApis) {
+				} catch (error) {
+					if (signal?.aborted) return;
+					const errorMessage = asApiError(error).message;
+					for (const userId of chunk) {
 						setApiResult(userId, api, { error: errorMessage });
 					}
+					logger.error('System API batch error:', {
+						apiId: api.id,
+						apiName: api.name,
+						chunkSize: chunk.length,
+						error: errorMessage
+					});
 				}
-				logger.error('System API batch error:', { chunkSize: chunk.length, error: errorMessage });
-			}
-		};
+			};
 
-		const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
-		for (const [i, chunk] of chunks.entries()) {
-			if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
-			if (signal?.aborted) throw getAbortError(signal);
-			await processChunk(chunk);
+			const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
+			for (const [i, chunk] of chunks.entries()) {
+				if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
+				if (signal?.aborted) throw getAbortError(signal);
+				await processChunk(chunk);
+			}
 		}
 	})();
 
@@ -268,8 +311,9 @@ export async function queryMultipleUsers(
 						if (signal?.aborted) return;
 						const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
 						for (const userId of chunk) {
-							const userStatus = userMap.get(userId);
-							setApiResult(userId, api, userStatus ? { data: userStatus } : {});
+							setApiResult(userId, api, {
+								data: resolveBatchEntry(userId, userMap.get(userId))
+							});
 						}
 					} catch (error) {
 						if (signal?.aborted) return;
@@ -324,12 +368,10 @@ export function pickDefaultTab<T extends UserStatus | GroupStatus>(
 	const allSettled = values.every((result) => !result.loading);
 	if (!allSettled) return null;
 
-	// Prefer first system API that has data, in priority order: SIGMANET > RAB > TASE
-	const systemOrder = ['system-scsn', 'system-rab', 'system-tase'];
-	for (const id of systemOrder) {
-		const result = combined.get(id);
-		if (result && 'data' in result && result.data) return id;
-	}
+	// Open on the most severe provider verdict rather than the first to answer, so a clean
+	// SIGMANET result cannot mask a TASE detection on the user's own tooltip
+	const worstSystem = pickHighestSeveritySystemResult(combined);
+	if (worstSystem) return worstSystem[0];
 
 	// Fall back to first custom API with a detection
 	const firstCustomWithDetection = [...combined.entries()].find(

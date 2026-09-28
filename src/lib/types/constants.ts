@@ -47,26 +47,14 @@ export const API_CONFIG = {
 		GROUP_CHECK: '/v1/lookup/roblox/group',
 		QUEUE_USER: '/v1/queue/roblox/user',
 		QUEUE_LIMITS: '/v1/queue/limits',
-		SUBMIT_VOTE: '/v1/votes/roblox/user',
-		GET_VOTES: '/v1/votes/roblox/user',
-		GET_STATS: '/v2/stats',
 		QUEUE_STATUS: '/v1/queue/roblox/user/status',
+		USAGE: '/v1/usage',
 		EXPORT_GROUP_TRACKED_USERS: '/v1/export/roblox/group',
 		LOOKUP_OUTFITS_BY_NAME: '/v1/lookup/outfits/by-name',
 		LOOKUP_OUTFITS_BY_ID: '/v1/lookup/outfits/by-id',
 		EXTENSION_MEMBERSHIP_STATUS: '/v1/extension/membership/status',
 		EXTENSION_MEMBERSHIP_BADGE: '/v1/extension/membership/badge',
-		EXTENSION_MEMBERSHIP_VERIFICATION: '/v1/extension/membership/verification',
-		AUTH_ROBLOX_CHALLENGE: '/v1/auth/roblox/challenge',
-		AUTH_ROBLOX_VERIFY: '/v1/auth/roblox/verify',
-		AUTH_ROBLOX_EXCHANGE: '/v1/auth/roblox/exchange',
-		AUTH_ROBLOX_LOGOUT: '/v1/auth/roblox/logout',
-		AUTH_ROBLOX_LOGOUT_ALL: '/v1/auth/roblox/logout-all',
-		ME_PROFILE: '/v1/me/profile',
-		ME_SETTINGS: '/v1/me/settings',
-		ME_REFRESH: '/v1/me/refresh',
-		ME_SESSIONS: '/v1/me/sessions',
-		LEADERBOARD: '/v1/leaderboard'
+		EXTENSION_MEMBERSHIP_VERIFICATION: '/v1/extension/membership/verification'
 	},
 	BATCH_SIZE: 100,
 	BATCH_DELAY: 250,
@@ -89,9 +77,7 @@ export const API_ACTIONS = {
 	CHECK_MULTIPLE_GROUPS: 'checkMultipleGroups',
 	QUEUE_USER: 'queueUser',
 	GET_QUEUE_LIMITS: 'getQueueLimits',
-	SUBMIT_VOTE: 'submitVote',
-	GET_VOTES: 'getVotes',
-	GET_STATS: 'getStats',
+	GET_USAGE: 'getUsage',
 	TRANSLATE_TEXT: 'translateText',
 	GET_GROUP_TRACKED_USERS: 'getGroupTrackedUsers',
 	LOOKUP_ROBLOX_USER_DISCORD: 'lookupRobloxUserDiscord',
@@ -106,17 +92,6 @@ export const API_ACTIONS = {
 	EXTENSION_CONFIRM_MEMBERSHIP_VERIFICATION: 'extensionConfirmMembershipVerification',
 	HAS_TRANSLATE_PERMISSION: 'hasTranslatePermission',
 	REQUEST_TRANSLATE_PERMISSION: 'requestTranslatePermission',
-	ROBLOX_AUTH_CHALLENGE: 'robloxAuthChallenge',
-	ROBLOX_AUTH_VERIFY: 'robloxAuthVerify',
-	ROBLOX_AUTH_EXCHANGE: 'robloxAuthExchange',
-	ROBLOX_AUTH_LOGOUT: 'robloxAuthLogout',
-	ROBLOX_AUTH_LOGOUT_ALL: 'robloxAuthLogoutAll',
-	ME_GET_PROFILE: 'meGetProfile',
-	ME_UPDATE_SETTINGS: 'meUpdateSettings',
-	ME_REFRESH_IDENTITY: 'meRefreshIdentity',
-	ME_LIST_SESSIONS: 'meListSessions',
-	ME_REVOKE_SESSION: 'meRevokeSession',
-	GET_LEADERBOARD: 'getLeaderboard',
 	API_WHOAMI: 'apiWhoami'
 } as const;
 
@@ -144,13 +119,6 @@ export const REASON_KEYS = {
 	USER_PROFILE: 'User Profile',
 	AVATAR_OUTFIT: 'Avatar Outfit'
 } as const;
-
-export const VOTE_TYPES = {
-	UPVOTE: 1,
-	DOWNVOTE: -1
-} as const;
-
-export type VoteType = (typeof VOTE_TYPES)[keyof typeof VOTE_TYPES];
 
 export const OBSERVER_CONFIG = {
 	DEFAULT_HEALTH_CHECK_INTERVAL: 3000,
@@ -200,11 +168,9 @@ export const USER_ACTIONS = {
 	QUEUE_REQUESTED: 'queue_requested',
 	QUEUE_CONFIRMED: 'queue_confirmed',
 	QUEUE_CANCELLED: 'queue_cancelled',
-	VOTE_SUBMITTED: 'vote_submitted',
 	FRIEND_PROCEED: 'friend_proceed',
 	FRIEND_CANCEL: 'friend_cancel',
 	FRIEND_BLOCK: 'friend_block',
-	VOTE_WIDGET_CLICK: 'voting_widget_click',
 	FRIEND_WARNING_PROCEED: 'friend_warning_proceed',
 	FRIEND_WARNING_CANCEL: 'friend_warning_cancel',
 	QUEUE_POPUP_CONFIRM: 'queue_popup_confirm',

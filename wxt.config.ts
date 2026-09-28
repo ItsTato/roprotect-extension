@@ -2,7 +2,7 @@ import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
 
 const isDev = process.env['NODE_ENV'] === 'development' || process.argv.includes('dev');
-const apiDomain = isDev ? 'roscoe-dev.rotector.com' : 'roscoe.rotector.com';
+const apiDomain = isDev ? 'roprotect-dev.tlet.xyz' : 'roprotect.tlet.xyz';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -93,7 +93,7 @@ export default defineConfig({
 			...(browser === 'firefox' && {
 				browser_specific_settings: {
 					gecko: {
-						id: 'rotector@jaxron.me',
+						id: 'roprotect@tlet.xyz',
 						strict_min_version: '129.0',
 						// See src/lib/utils/device-fingerprint.ts for what this declares and why
 						data_collection_permissions: {

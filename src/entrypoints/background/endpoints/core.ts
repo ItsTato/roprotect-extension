@@ -4,13 +4,10 @@ import type {
 	QueueLimitsData,
 	QueueResult,
 	RobloxUserDiscordLookup,
-	UserStatus,
-	VoteData,
-	VoteResult
+	UserStatus
 } from '@/lib/types/api';
 import type { QueueStatusResponse } from '@/lib/types/queue-history';
-import type { ActivityHours, StatsResponse } from '@/lib/types/stats';
-import { API_CONFIG, VOTE_TYPES } from '@/lib/types/constants';
+import { API_CONFIG } from '@/lib/types/constants';
 import { SETTINGS_KEYS } from '@/lib/types/settings';
 import { getStorage } from '@/lib/utils/storage';
 import {
@@ -22,10 +19,8 @@ import {
 	parseQueueStatusResponse,
 	parseRobloxUserDiscordLookup,
 	parseUserStatus,
-	parseUserStatusMap,
-	parseVoteData
+	parseUserStatusMap
 } from '@/lib/schemas/rotector';
-import { parseStatsResponse } from '@/lib/schemas/stats';
 import { makeHttpRequest } from '../http-client';
 import { processBatchEntityIds, validateEntityId } from '@/lib/utils/dom/sanitizer';
 
@@ -139,48 +134,6 @@ export async function queueUser(
 		maxRetries: 1,
 		rawResponse: true,
 		parse: parseQueueResult
-	});
-}
-
-export async function submitVote(
-	userId: string | number,
-	voteType: number,
-	clientId?: string
-): Promise<VoteResult> {
-	const sanitizedUserId = validateEntityId(userId);
-
-	if (voteType !== VOTE_TYPES.UPVOTE && voteType !== VOTE_TYPES.DOWNVOTE) {
-		throw new Error('Invalid vote type. Must be 1 (upvote) or -1 (downvote)');
-	}
-
-	const voteData = await makeHttpRequest(`${API_CONFIG.ENDPOINTS.SUBMIT_VOTE}/${sanitizedUserId}`, {
-		method: 'POST',
-		body: JSON.stringify({ voteType }),
-		clientId,
-		parse: parseVoteData
-	});
-
-	return {
-		success: true,
-		userId: Number.parseInt(sanitizedUserId, 10),
-		voteType,
-		newVoteData: voteData
-	};
-}
-
-export async function getVotes(userId: string | number, clientId?: string): Promise<VoteData> {
-	const sanitizedUserId = validateEntityId(userId);
-	return makeHttpRequest(`${API_CONFIG.ENDPOINTS.GET_VOTES}/${sanitizedUserId}?includeVote=true`, {
-		method: 'GET',
-		clientId,
-		parse: parseVoteData
-	});
-}
-
-export async function getStats(hours: ActivityHours): Promise<StatsResponse> {
-	return makeHttpRequest(`${API_CONFIG.ENDPOINTS.GET_STATS}?hours=${String(hours)}`, {
-		method: 'GET',
-		parse: parseStatsResponse
 	});
 }
 

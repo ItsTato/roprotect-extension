@@ -2,7 +2,6 @@ import type { UserStatus, GroupStatus } from '../../types/api';
 import type { CombinedStatus, CustomApiResult } from '../../types/custom-api';
 import { RO_PROTECT_API_ID } from '../../stores/custom-apis';
 import { getAssetUrl } from '../assets';
-import type { PublicPath } from 'wxt/browser';
 import { REASON_KEYS, STATUS } from '../../types/constants';
 
 export const FIRST_DETECTION_FLAG_TYPES = new Set<number>([
@@ -28,7 +27,7 @@ export function createErrorCombinedStatus<T extends UserStatus | GroupStatus>(
 				error,
 				loading: false,
 				timestamp: Date.now(),
-				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png' as PublicPath)
+				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 			}
 		]
 	]);
@@ -53,7 +52,7 @@ export function wrapGroupStatus(
 					apiId: id,
 					apiName: 'RoProtect',
 					loading: true,
-					landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png' as PublicPath)
+					landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 				}
 			]
 		]);
@@ -71,7 +70,7 @@ export function wrapGroupStatus(
 				data: groupStatus,
 				loading: false,
 				timestamp: Date.now(),
-				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png' as PublicPath)
+				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 			}
 		]
 	]);
@@ -190,25 +189,93 @@ export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
 	return firstWithData;
 }
 
-// Picks the first system API that has data, in priority order
-export function pickFirstSystemApiResult<T extends UserStatus | GroupStatus>(
-	combined: CombinedStatus<T> | null
-): CustomApiResult<T> | undefined {
+// The system providers, most trusted first. Only used to break ties between equally severe
+// verdicts, never to let a milder provider outrank a more severe one.
+const SYSTEM_API_ORDER = ['system-scsn', 'system-rab', 'system-tase'] as const;
+
+type SystemApiId = (typeof SYSTEM_API_ORDER)[number];
+
+// The system provider whose verdict should stand for the user as a whole, as [apiId, result].
+//
+// RoProtect runs three independent services (SIGMANET, RAB, TASE) and they regularly disagree:
+// a user can be clean on one and flagged on another. Taking whichever provider answered first
+// would let a clean SIGMANET verdict hide a TASE detection, so an actionable flag from any
+// provider wins outright and the most severe one wins among several. When nothing is
+// actionable the order above decides, which keeps non-flagged states such as QUEUED or
+// PROVISIONAL intact.
+export function pickHighestSeveritySystemResult<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null | undefined
+): [string, CustomApiResult<T>] | undefined {
 	if (!combined) return undefined;
 
-	const systemOrder = ['system-scsn', 'system-rab', 'system-tase'];
+	let best: [string, CustomApiResult<T>] | undefined;
+	let bestRank = ACTIONABLE_FLAG_SEVERITY.length;
 
-	for (const id of systemOrder) {
+	const consider = (id: string, result: CustomApiResult<T>) => {
+		if (!result.data) return;
+		const rank = ACTIONABLE_FLAG_SEVERITY.indexOf(result.data.flagType);
+		if (rank !== -1) {
+			if (rank < bestRank) {
+				bestRank = rank;
+				best = [id, result];
+			}
+			return;
+		}
+		best ??= [id, result];
+	};
+
+	for (const id of SYSTEM_API_ORDER) {
 		const result = combined.get(id);
-		if (result?.data) return result;
+		if (result) consider(id, result);
 	}
 
-	// Fall back to any system API with data
+	// RoProtect can add services later, so consider any other system provider too rather than
+	// silently dropping a verdict from a service this build has never heard of
 	for (const [id, result] of combined.entries()) {
-		if (id.startsWith('system-') && result.data) return result;
+		if (id.startsWith('system-') && !SYSTEM_API_ORDER.includes(id as SystemApiId)) {
+			consider(id, result);
+		}
 	}
 
-	return undefined;
+	return best;
+}
+
+export interface SystemApiSummary<T> {
+	data: T | undefined;
+	loading: boolean;
+	error: string | null;
+}
+
+const NO_SYSTEM_APIS: SystemApiSummary<never> = { data: undefined, loading: false, error: null };
+
+// Collapses the system providers into the single verdict/signal the call sites used to read off
+// a lone 'system-roprotect' entry. That id no longer exists now that RoProtect is queried as
+// three separate services, so reading it directly always missed every verdict and left callers
+// stuck on their "no data yet" state.
+//
+// Once any provider has answered, that verdict stands on its own: a slower sibling must not hold
+// the UI in its loading state, and a failing sibling must not overwrite a real verdict with an
+// error. Loading and error therefore only surface while no provider has produced data.
+export function getSystemApiSummary<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null | undefined
+): SystemApiSummary<T> {
+	if (!combined) return NO_SYSTEM_APIS;
+
+	const data = pickHighestSeveritySystemResult(combined)?.[1].data;
+	if (data) return { data, loading: false, error: null };
+
+	let sawSystem = false;
+	let loading = false;
+	let error: string | null = null;
+
+	for (const [id, result] of combined.entries()) {
+		if (!id.startsWith('system-')) continue;
+		sawSystem = true;
+		if (result.loading) loading = true;
+		if (result.error && error === null) error = result.error;
+	}
+
+	return sawSystem ? { data: undefined, loading, error } : NO_SYSTEM_APIS;
 }
 
 const ACTIONABLE_FLAG_TYPES = new Set<number>([

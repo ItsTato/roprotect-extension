@@ -36,7 +36,6 @@
 @import url('./popup/stats/stats.css');
 @import url('./popup/stats/content.css');
 @import url('./popup/settings/settings.css');
-@import url('./popup/queue/history.css');
 @import url('./popup/developer/shared.css');
 @import url('./popup/developer/performance.css');
 @import url('./popup/options/api/management.css');
@@ -44,8 +43,6 @@
 @import url('./popup/options/api/import.css');
 @import url('./popup/options/api/documentation.css');
 @import url('./popup/options/membership/membership.css');
-@import url('./popup/options/roblox-account/account.css');
-@import url('./popup/leaderboard.css');
 @import url('./popup/footer.css');
 @import url('./popup/legal-paused.css');
 

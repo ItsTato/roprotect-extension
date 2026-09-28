@@ -28,8 +28,13 @@
 
 	async function handleSubmit() {
 		const trimmed = apiKey.trim();
+		logger.debug('[ApiKeyModal] handleSubmit called', {
+			hasKey: !!trimmed,
+			keyLength: trimmed.length
+		});
 		if (!trimmed) {
 			validationError = $_('api_key_modal_error_empty');
+			logger.debug('[ApiKeyModal] Empty key, showing error');
 			return;
 		}
 
@@ -38,24 +43,40 @@
 
 		try {
 			// Validate the key by calling whoami
+			logger.debug('[ApiKeyModal] Calling apiClient.whoami...');
 			const response = await apiClient.whoami(trimmed);
+			logger.debug('[ApiKeyModal] whoami response received', {
+				success: response.success,
+				hasError: !!response.error,
+				hasData: !!response.data
+			});
 
 			if (!response.success) {
+				logger.error('[ApiKeyModal] whoami returned success=false', { error: response.error });
 				throw new Error(response.error ?? 'Invalid response');
 			}
 
 			// Store the API key
+			logger.debug('[ApiKeyModal] Storing API key in settings...');
 			await updateSetting(SETTINGS_KEYS.API_KEY, trimmed);
 
 			// Load the custom APIs based on whoami response
+			logger.debug('[ApiKeyModal] Loading custom APIs...');
 			await loadCustomApis();
 
+			logger.debug('[ApiKeyModal] API key validated successfully');
 			showSuccess($_('api_key_modal_success'));
 			onSuccess();
 			isOpen = false;
 		} catch (error) {
 			const err = asApiError(error);
-			logger.error('API key validation failed:', error);
+			logger.error('[ApiKeyModal] API key validation failed:', {
+				error,
+				message: err.message,
+				status: err.status,
+				code: err.code,
+				details: err.details
+			});
 
 			switch (err.status) {
 				case 401: {
@@ -78,12 +99,46 @@
 			isValidating = false;
 		}
 	}
+
+	function toggleVisibility() {
+		// The modal is rendered in a shadow root via OverlayPortal, so we need to query within the shadow root
+		// Find the modal root element that contains the shadow root
+		let input: HTMLInputElement | null = null;
+
+		// First try direct document (for non-shadow DOM contexts)
+		const directInput = document.querySelector('#api-key');
+		if (directInput instanceof HTMLInputElement) {
+			input = directInput;
+		}
+
+		// If not found, try to find it in shadow roots
+		if (!input) {
+			// Check all elements with shadow roots for the input
+			const allElements = document.querySelectorAll('*');
+			for (const el of allElements) {
+				if (el.shadowRoot) {
+					const found = el.shadowRoot.querySelector('#api-key');
+					if (found instanceof HTMLInputElement) {
+						input = found;
+						break;
+					}
+				}
+			}
+		}
+
+		if (input) {
+			input.type = input.type === 'password' ? 'text' : 'password';
+			logger.debug('[ApiKeyModal] Toggled visibility', { newType: input.type });
+		} else {
+			logger.error('[ApiKeyModal] Could not find input element for visibility toggle');
+		}
+	}
 </script>
 
 <Modal {onClose} showStatusChip={false} size="narrow" title={$_('api_key_modal_title')} bind:isOpen>
 	<div class="api-key-modal">
 		<div class="api-key-modal-header">
-			<img class="api-key-logo" alt="SIGMANET" height="48" src={sigmanetLogo} width="48" />
+			<img class="api-key-logo" alt="SIGMANET" height="160" src={sigmanetLogo} width="160" />
 			<h1 class="api-key-title">{$_('api_key_modal_title')}</h1>
 			<p class="api-key-subtitle">{$_('api_key_modal_subtitle')}</p>
 		</div>
@@ -111,10 +166,7 @@
 					<button
 						class="toggle-visibility"
 						aria-label={$_('api_key_modal_toggle_visibility')}
-						onclick={() => {
-							const input = document.querySelector<HTMLInputElement>('#api-key');
-							if (input) input.type = input.type === 'password' ? 'text' : 'password';
-						}}
+						onclick={toggleVisibility}
 						type="button"
 					>
 						<svg

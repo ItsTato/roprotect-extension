@@ -237,17 +237,14 @@
 		}
 	}
 
+	// System APIs carry the real whoami-resolved URLs on the config, so both
+	// kinds display their actual endpoints rather than a hardcoded placeholder.
 	function getEndpoints(api: CustomApiConfig) {
 		const stripScheme = (u: string) => u.replace(/^https?:\/\//, '');
-		return api.isSystem
-			? {
-					single: { url: 'roscoe.rotector.com/v1/lookup/roblox/user/{userId}' },
-					batch: { url: 'roscoe.rotector.com/v1/lookup/roblox/users' }
-				}
-			: {
-					single: { url: stripScheme(api.singleUrl) },
-					batch: { url: stripScheme(api.batchUrl) }
-				};
+		return {
+			single: { url: stripScheme(api.singleUrl) },
+			batch: { url: stripScheme(api.batchUrl) }
+		};
 	}
 
 	// Probes browser permissions for each user API in parallel so the UI can show a per-row needs-permission pill

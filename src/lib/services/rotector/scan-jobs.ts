@@ -7,7 +7,8 @@ import type { CombinedStatus, CustomApiResult } from '../../types/custom-api';
 import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
 import {
 	calculateStatusBadges,
-	pickHighestSeverityCustomFlag
+	pickHighestSeverityCustomFlag,
+	pickHighestSeveritySystemResult
 } from '../../utils/status/status-utils';
 
 const SCAN_PHASE_CHECK_START = 30;
@@ -27,8 +28,6 @@ export type ScanCategory =
 	| 'unknown'
 	| 'safe';
 export type ScanCounts = Map<ScanCategory, number>;
-
-const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
 
 function flagToCategory(flagType: number): ScanCategory {
 	switch (flagType) {
@@ -68,15 +67,15 @@ interface ScanBucket {
 	fromIntegration: boolean;
 }
 
-// Get the first system API result that has data
+// The system provider whose verdict represents the friend: the most severe one across
+// SIGMANET/RAB/TASE, so a clean service cannot mask a detection from a sibling one.
 function getSystemApiResult(
 	combined: CombinedStatus<UserStatus>
 ): Pick<CustomApiResult<UserStatus>, 'data' | 'error' | 'loading'> | null {
-	for (const id of SYSTEM_API_IDS) {
-		const result = combined.get(id);
-		if (result) return { data: result.data, error: result.error, loading: result.loading };
-	}
-	return null;
+	const worst = pickHighestSeveritySystemResult(combined);
+	if (!worst) return null;
+	const result = worst[1];
+	return { data: result.data, error: result.error, loading: result.loading };
 }
 
 // Picks one bucket per friend, applying outfit/queued overrides. Custom APIs are bucketed by the
