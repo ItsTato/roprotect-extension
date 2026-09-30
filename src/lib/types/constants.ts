@@ -54,7 +54,14 @@ export const API_CONFIG = {
 	BASE_URL: `https://${API_DOMAIN}`,
 	ENDPOINTS: {
 		USER_CHECK: '/v1/lookup/roblox/user',
-		GROUP_CHECK: '/v1/lookup/roblox/group',
+		// Group verdicts are served by SCSN rather than the first-party backend.
+		// Matches the doubled-version shape of the per-provider user routes
+		// (/v1/scsn/v1/lookup/user/{userId}). See SCSN-GROUP-API.md.
+		GROUP_CHECK: '/v1/scsn/v1/lookup/roblox/group',
+		// Tracked users are a first-party sub-route of the group lookup, kept
+		// separate because SCSN does not serve /tracked-users yet. Deriving it
+		// from GROUP_CHECK would silently repoint it when the provider changes.
+		GROUP_TRACKED_USERS: '/v1/lookup/roblox/group',
 		QUEUE_USER: '/v1/queue/roblox/user',
 		QUEUE_LIMITS: '/v1/queue/limits',
 		QUEUE_STATUS: '/v1/queue/roblox/user/status',

@@ -1,9 +1,9 @@
 import { fetchAllFriendIds } from '../roblox/friends';
 import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
-import { queryMultipleUsers } from './unified-query';
+import { queryMultipleUsers, getEnabledCustomApis, isSystemApi } from './unified-query';
 import type { UserStatus } from '../../types/api';
-import type { CombinedStatus, CustomApiResult } from '../../types/custom-api';
+import type { CombinedStatus, CustomApiResult, CustomApiConfig } from '../../types/custom-api';
 import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
 import {
 	calculateStatusBadges,
@@ -142,10 +142,16 @@ export async function scanFriendsForUser(
 			lookupContext,
 			signal,
 			onUpdate: (friendId, combined) => {
-				// Track completion when any system API resolves
-				const systemResult =
-					combined.get('system-scsn') ?? combined.get('system-rab') ?? combined.get('system-tase');
-				if (!systemResult || systemResult.loading || completed.has(friendId)) return;
+				// Track completion only when ALL ENABLED system APIs have resolved for this friend.
+				const enabledSystemApis = getEnabledCustomApis().filter(isSystemApi);
+				const enabledSystemIds: string[] = enabledSystemApis.map((api: CustomApiConfig) => api.id);
+				if (enabledSystemIds.length === 0) return; // no system APIs configured
+
+				const allResolved = enabledSystemIds.every((id: string) => {
+					const result = combined.get(id);
+					return result && !result.loading;
+				});
+				if (!allResolved || completed.has(friendId)) return;
 				completed.add(friendId);
 				const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
 				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));

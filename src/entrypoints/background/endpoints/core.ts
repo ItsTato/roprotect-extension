@@ -23,6 +23,15 @@ import {
 } from '@/lib/schemas/rotector';
 import { makeHttpRequest } from '../http-client';
 import { processBatchEntityIds, validateEntityId } from '@/lib/utils/dom/sanitizer';
+import { logger } from '@/lib/utils/logging/logger';
+
+// SCSN returns flagType: -1 (UNKNOWN) with a "no record" reason for groups
+// it doesn't track. Treat that as "no data" rather than "update required".
+function isScsnNoRecord(status: GroupStatus): boolean {
+	if (status.flagType !== -1) return false;
+	const reason = Object.values(status.reasons)[0];
+	return reason?.message?.includes('no record') ?? false;
+}
 
 export async function checkUserStatus(
 	userId: string | number,
@@ -46,11 +55,30 @@ export async function checkUserStatus(
 export async function checkGroupStatus(
 	groupId: string | number,
 	clientId?: string
-): Promise<GroupStatus> {
+): Promise<GroupStatus | null> {
 	const sanitizedGroupId = validateEntityId(groupId);
 
 	const url = `${API_CONFIG.ENDPOINTS.GROUP_CHECK}/${sanitizedGroupId}`;
-	return makeHttpRequest(url, { method: 'GET', clientId, parse: parseGroupStatus });
+	try {
+		// SCSN returns bare verdict objects, not the Rotector {success, data} envelope.
+		// rawResponse: true skips envelope unwrap; we parse the body directly.
+		const status = await makeHttpRequest(url, {
+			method: 'GET',
+			clientId,
+			rawResponse: true,
+			parse: parseGroupStatus
+		});
+		// SCSN returns UNKNOWN (-1) with a "no record" reason for untracked groups.
+		// Treat that as "no data" instead of rendering "Update Required".
+		if (isScsnNoRecord(status)) return null;
+		return status;
+	} catch (error) {
+		logger.warn('[core] SCSN group lookup unavailable, returning no status', {
+			groupId: sanitizedGroupId,
+			error
+		});
+		return null;
+	}
 }
 
 export async function checkMultipleUsers(
@@ -87,22 +115,37 @@ export async function checkMultipleGroups(
 	groupIds: Array<string | number>,
 	clientId?: string,
 	lookupContext?: string
-): Promise<GroupStatus[]> {
+): Promise<Array<GroupStatus | null>> {
 	const sanitizedGroupIds = processBatchEntityIds(groupIds);
 
 	const requestBody = {
 		ids: sanitizedGroupIds.map((id) => Number.parseInt(id, 10))
 	};
 
-	const map = await makeHttpRequest(API_CONFIG.ENDPOINTS.GROUP_CHECK, {
-		method: 'POST',
-		body: JSON.stringify(requestBody),
-		clientId,
-		lookupContext,
-		parse: parseGroupStatusMap
-	});
+	try {
+		// SCSN returns bare verdict map, not the Rotector envelope.
+		const map = await makeHttpRequest(API_CONFIG.ENDPOINTS.GROUP_CHECK, {
+			method: 'POST',
+			body: JSON.stringify(requestBody),
+			clientId,
+			lookupContext,
+			rawResponse: true,
+			parse: parseGroupStatusMap
+		});
 
-	return Object.values(map);
+		// SCSN returns UNKNOWN (-1) + "no record" for untracked groups.
+		// Convert those to null so callers see "no data" not "update required".
+		return sanitizedGroupIds.map((id) => {
+			const status = map[id];
+			return status && !isScsnNoRecord(status) ? status : null;
+		});
+	} catch (error) {
+		logger.warn('[core] SCSN batch group lookup unavailable, returning no status', {
+			count: sanitizedGroupIds.length,
+			error
+		});
+		return sanitizedGroupIds.map(() => null);
+	}
 }
 
 export async function queueUser(
@@ -174,8 +217,19 @@ export async function getGroupTrackedUsers(
 		params.set('active', active);
 	}
 
-	const url = `${API_CONFIG.ENDPOINTS.GROUP_CHECK}/${sanitizedGroupId}/tracked-users?${params.toString()}`;
-	return makeHttpRequest(url, { method: 'GET', parse: parseGroupTrackedUsers });
+	// Tracked users stay on the first-party backend: SCSN serves the group
+	// verdict routes but not this sub-route yet. Kept as its own constant so
+	// switching GROUP_CHECK to SCSN cannot repoint it by accident.
+	const url = `${API_CONFIG.ENDPOINTS.GROUP_TRACKED_USERS}/${sanitizedGroupId}/tracked-users?${params.toString()}`;
+	try {
+		return await makeHttpRequest(url, { method: 'GET', parse: parseGroupTrackedUsers });
+	} catch (error) {
+		logger.warn('[core] group tracked-users lookup unavailable, returning empty page', {
+			groupId: sanitizedGroupId,
+			error
+		});
+		return { users: [], totalCount: 0, nextCursor: null, hasMore: false };
+	}
 }
 
 export async function lookupRobloxUserDiscord(

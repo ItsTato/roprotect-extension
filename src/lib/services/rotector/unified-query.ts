@@ -50,7 +50,7 @@ function createRestrictedResult(): CombinedStatus<UserStatus> {
 	);
 }
 
-function getEnabledCustomApis(): CustomApiConfig[] {
+export function getEnabledCustomApis(): CustomApiConfig[] {
 	const s = get(settings);
 	const experimentalCustomApisEnabled = s[SETTINGS_KEYS.EXPERIMENTAL_CUSTOM_APIS_ENABLED];
 
@@ -59,7 +59,7 @@ function getEnabledCustomApis(): CustomApiConfig[] {
 		.toSorted((a, b) => a.order - b.order);
 }
 
-function isSystemApi(api: CustomApiConfig): boolean {
+export function isSystemApi(api: CustomApiConfig): boolean {
 	return !!api.isSystem && SYSTEM_API_IDS.includes(api.id as (typeof SYSTEM_API_IDS)[number]);
 }
 
@@ -246,49 +246,51 @@ export async function queryMultipleUsers(
 	const systemPromise = (async () => {
 		if (systemApis.length === 0) return;
 
-		// For system APIs, call each API's batch endpoint separately since they have different URLs
-		for (const api of systemApis) {
-			const toFetch: string[] = [];
-			for (const userId of userIds) {
-				// Skip cache for system APIs since they have different endpoints
-				toFetch.push(userId);
-			}
-			if (toFetch.length === 0) continue;
-
-			const processChunk = async (chunk: string[]): Promise<void> => {
-				try {
-					const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
-						apiConfig: api,
-						signal,
-						lookupContext
-					});
-					if (signal?.aborted) return;
-					const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
-					for (const userId of chunk) {
-						setApiResult(userId, api, { data: resolveBatchEntry(userId, userMap.get(userId)) });
-					}
-				} catch (error) {
-					if (signal?.aborted) return;
-					const errorMessage = asApiError(error).message;
-					for (const userId of chunk) {
-						setApiResult(userId, api, { error: errorMessage });
-					}
-					logger.error('System API batch error:', {
-						apiId: api.id,
-						apiName: api.name,
-						chunkSize: chunk.length,
-						error: errorMessage
-					});
+		// Fire each system provider's batched fetch in parallel. Requests within
+		// the same provider remain sequential via chunking + BATCH_DELAY.
+		await Promise.all(
+			systemApis.map(async (api) => {
+				const toFetch: string[] = [];
+				for (const userId of userIds) {
+					toFetch.push(userId);
 				}
-			};
+				if (toFetch.length === 0) return;
 
-			const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
-			for (const [i, chunk] of chunks.entries()) {
-				if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
-				if (signal?.aborted) throw getAbortError(signal);
-				await processChunk(chunk);
-			}
-		}
+				const processChunk = async (chunk: string[]): Promise<void> => {
+					try {
+						const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
+							apiConfig: api,
+							signal,
+							lookupContext
+						});
+						if (signal?.aborted) return;
+						const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
+						for (const userId of chunk) {
+							setApiResult(userId, api, { data: resolveBatchEntry(userId, userMap.get(userId)) });
+						}
+					} catch (error) {
+						if (signal?.aborted) return;
+						const errorMessage = asApiError(error).message;
+						for (const userId of chunk) {
+							setApiResult(userId, api, { error: errorMessage });
+						}
+						logger.error('System API batch error:', {
+							apiId: api.id,
+							apiName: api.name,
+							chunkSize: chunk.length,
+							error: errorMessage
+						});
+					}
+				};
+
+				const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
+				for (const [i, chunk] of chunks.entries()) {
+					if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
+					if (signal?.aborted) throw getAbortError(signal);
+					await processChunk(chunk);
+				}
+			})
+		);
 	})();
 
 	const customPromise = (async () => {

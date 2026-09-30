@@ -14,8 +14,10 @@ const REASON_FORMATS = ['numeric', 'string'] as const;
 
 const CustomApiBadgeSchema = v.object({
 	text: v.string('Badge: text must be string'),
-	color: v.optional(v.string('Badge: color must be string')),
-	textColor: v.optional(v.string('Badge: textColor must be string'))
+	// Some providers (RAB, TASE) omit color/textColor on badges. Use nullish
+	// to accept missing keys AND explicit null without failing.
+	color: v.nullish(v.string('Badge: color must be string')),
+	textColor: v.nullish(v.string('Badge: textColor must be string'))
 });
 
 const UserStatusResponseSchema = v.object({
@@ -27,7 +29,8 @@ const UserStatusResponseSchema = v.object({
 		),
 		STATUS.FLAGS.UNKNOWN
 	),
-	category: v.optional(v.number('Invalid "category" field (must be number if present)')),
+	// Some providers send category as string; coerce to number. Optional in both schemas.
+	category: v.optional(v.pipe(v.union([v.number(), v.string()]), v.transform(Number))),
 	confidence: v.optional(v.number('Invalid "confidence" field (must be number if present)')),
 	// A record with no reasons omits the key entirely, and the contract also permits an
 	// explicit null, so normalise both to an empty object. The `optional` default covers
@@ -78,8 +81,8 @@ const ImportedApiConfigSchema = v.object({
 		v.pipe(
 			v.string('landscapeImageDataUrl must be a string'),
 			v.regex(
-				/^(data:image\/|chrome-extension:\/\/)/,
-				'landscapeImageDataUrl must be a data:image/ or chrome-extension:// URL'
+				/^(data:image\/|chrome-extension:\/\/|moz-extension:\/\/)/,
+				'landscapeImageDataUrl must be a data:image/, chrome-extension://, or moz-extension:// URL'
 			)
 		)
 	),
@@ -108,8 +111,8 @@ export const PersistedCustomApiSchema = v.object({
 		v.pipe(
 			v.string(),
 			v.regex(
-				/^(data:image\/|chrome-extension:\/\/)/,
-				'landscapeImageDataUrl must be a data:image/ or chrome-extension:// URL'
+				/^(data:image\/|chrome-extension:\/\/|moz-extension:\/\/)/,
+				'landscapeImageDataUrl must be a data:image/, chrome-extension://, or moz-extension:// URL'
 			)
 		)
 	),
