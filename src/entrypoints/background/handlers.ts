@@ -10,6 +10,7 @@ import {
 	checkMultipleGroups,
 	checkMultipleUsers,
 	checkUserStatus,
+	getDiscordAvatars,
 	getGroupTrackedUsers,
 	getQueueLimits,
 	lookupRobloxUserDiscord,
@@ -40,10 +41,10 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			// Use primary database if user is queued but not yet processed
 			const userId = typeof msg.userId === 'string' ? Number.parseInt(msg.userId, 10) : msg.userId;
 			const readPrimary = await isUserBeingProcessedInStorage(userId);
-			return checkUserStatus(msg.userId, msg.clientId, readPrimary);
+			return checkUserStatus(msg.userId, msg.clientId ?? undefined, readPrimary);
 		}
 		case API_ACTIONS.CHECK_GROUP_STATUS: {
-			return checkGroupStatus(msg.groupId, msg.clientId);
+			return checkGroupStatus(msg.groupId, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.CHECK_MULTIPLE_USERS: {
 			if (msg.apiConfig) {
@@ -55,10 +56,15 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			);
 			const unprocessed = await getUnprocessedUserIdsFromStorage(userIds);
 			const readPrimary = unprocessed.length > 0;
-			return checkMultipleUsers(msg.userIds, msg.clientId, msg.lookupContext, readPrimary);
+			return checkMultipleUsers(
+				msg.userIds,
+				msg.clientId ?? undefined,
+				msg.lookupContext,
+				readPrimary
+			);
 		}
 		case API_ACTIONS.CHECK_MULTIPLE_GROUPS: {
-			return checkMultipleGroups(msg.groupIds, msg.clientId, msg.lookupContext);
+			return checkMultipleGroups(msg.groupIds, msg.clientId ?? undefined, msg.lookupContext);
 		}
 		case API_ACTIONS.GET_GROUP_TRACKED_USERS: {
 			return getGroupTrackedUsers(msg.groupId, msg.cursor, msg.limit, msg.active);
@@ -71,12 +77,12 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 				msg.inappropriateProfile,
 				msg.inappropriateFriends,
 				msg.inappropriateGroups,
-				msg.clientId,
+				msg.clientId ?? undefined,
 				msg.captchaToken
 			);
 		}
 		case API_ACTIONS.GET_QUEUE_LIMITS: {
-			return getQueueLimits(msg.clientId);
+			return getQueueLimits(msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.GET_USAGE: {
 			return getApiUsage();
@@ -105,13 +111,13 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			return confirmMembershipVerification(msg.robloxUserId);
 		}
 		case API_ACTIONS.LOOKUP_ROBLOX_USER_DISCORD: {
-			return lookupRobloxUserDiscord(msg.userId, msg.clientId);
+			return lookupRobloxUserDiscord(msg.userId, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.LOOKUP_OUTFITS_BY_NAME: {
-			return lookupOutfitsByName(msg.userId, msg.names, msg.clientId);
+			return lookupOutfitsByName(msg.userId, msg.names, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.LOOKUP_OUTFITS_BY_ID: {
-			return lookupOutfitsById(msg.userId, msg.ids, msg.clientId);
+			return lookupOutfitsById(msg.userId, msg.ids, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.FETCH_OUTFIT_IMAGES: {
 			return fetchOutfitImages(msg.imageUrls);
@@ -141,6 +147,9 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		}
 		case API_ACTIONS.API_WHOAMI: {
 			return apiWhoami(msg.apiKey);
+		}
+		case API_ACTIONS.GET_DISCORD_AVATARS: {
+			return getDiscordAvatars(msg.discordUserIds, msg.clientId ?? undefined);
 		}
 	}
 }

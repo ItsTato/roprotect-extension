@@ -1,0 +1,383 @@
+/* =================================
+   TASE V2 DISPLAY
+   Mirrors discord-evidence.css so the TASE block reads as part of the same
+   tooltip surface instead of a separate design language.
+   ================================= */
+
+@utility tase-v2-container {
+	@apply inline-full;
+}
+
+/* =================================
+   SUMMARY BAR
+   ================================= */
+
+@utility tase-summary {
+	@apply text-xs-plus mb-2 flex flex-wrap items-center justify-center gap-2 rounded-md px-2 py-1.5;
+	color: var(--color-text-secondary);
+	background-color: var(--color-reason-bg);
+	border: 1px solid var(--color-border-subtle);
+}
+
+@utility tase-summary-item {
+	@apply inline-flex items-center gap-1 whitespace-nowrap;
+	color: var(--color-text-secondary);
+}
+
+@utility tase-summary-count {
+	@apply rounded-sm px-1.5 py-0.5 font-mono;
+	color: var(--color-text-tertiary);
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility tase-summary-separator {
+	@apply h-3 inline-px;
+	background-color: var(--color-border-subtle);
+}
+
+/* =================================
+   ACCOUNT CARD
+   ================================= */
+
+@utility tase-account-card {
+	@apply mb-2 flex flex-wrap items-center overflow-hidden rounded-md;
+	background-color: var(--color-reason-bg);
+	border: 1px solid var(--color-border-subtle);
+	transition: border-color 0.15s ease;
+
+	&:last-child {
+		@apply mb-0;
+	}
+
+	&.expanded {
+		border-color: var(--color-border);
+	}
+}
+
+/* Three rows: a meta line (total score + flagged-server count) above the two
+   identity rows (username, then userId). Chevron and avatar both span all
+   three rows, so each is centred on the card's y-axis. The severity flag is an
+   overlay in the avatar's corner and therefore needs no column of its own, which
+   is what pulls the identity text left against the avatar.
+
+   Each identity row owns its copy button as a flex sibling of the text rather
+   than sharing a grid column, which is what lets the button hug its own line
+   instead of sitting at the far end of the wider row. */
+@utility tase-account-header {
+	@apply min-w-0 flex-1 items-center gap-x-2 gap-y-0 p-2.5;
+	display: grid;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto;
+}
+
+/* The row span must be written as `grid-row: 1 / span 3`. A bare
+   `grid-row: 1` is the shorthand that resets `grid-row-end` to `auto`, which
+   cancels the `row-span-3` from `@apply` — the cell then occupies only row 1 and
+   its `self-center` centres against the top of the block instead of the whole. */
+@utility tase-chevron-cell {
+	@apply flex items-center self-center;
+	grid-column: 1;
+	grid-row: 1 / span 3;
+}
+
+@utility tase-account-toggle {
+	@apply cursor-pointer rounded-sm border-none bg-transparent p-0.5;
+	color: inherit;
+	appearance: none;
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+}
+
+/* The frame is absolutely positioned so it cannot influence the grid's track
+   sizing. While it sat in flow spanning the identity rows, its 48px height was
+   distributed across those tracks, inflating them past their own text and
+   leaving large gaps above and below the username and id. Out of flow, the rows
+   size purely to their text.
+
+   The holder spans all three rows and centres the frame against them, so the
+   avatar sits on the card's y-axis rather than drifting toward the identity
+   block. `me-2` keeps clear space between the avatar and the identity text. */
+@utility tase-avatar-holder {
+	@apply relative me-2 block w-12 shrink-0 self-stretch;
+	grid-column: 2;
+	grid-row: 1 / span 3;
+}
+
+/* The badge needs a positioning context that is exactly the avatar's 48px box.
+   The holder cannot serve: it stretches over all three grid rows, so its height
+   is the whole header and `bottom-0` anchored the badge to the bottom of that,
+   nowhere near the avatar. This anchor mirrors the frame's centring and size. */
+@utility tase-avatar-anchor {
+	@apply absolute start-0 inset-bs-1/2 block h-12 w-12 -translate-y-1/2;
+}
+
+@utility tase-avatar-frame {
+	@apply absolute inset-0 block overflow-hidden rounded-full;
+	background-color: var(--color-bg-tertiary);
+	appearance: none;
+}
+
+/* Severity flag pinned to the avatar's bottom-inline-end corner.
+
+   Roblox renders its own flag indicators on the friends page as a solid circle
+   in the severity colour with a white glyph knocked out of it, so this inverts
+   our earlier treatment: the severity colour moves to the fill and the glyph
+   goes white, instead of a card-coloured chip holding a coloured glyph. Matches
+   `outfit-stack-flagged-indicator` and `badge-bg-reportable` elsewhere in the
+   codebase. The severity colour arrives as `--tase-flag-color` from inline
+   style so the same token drives fill and tooltip text. */
+@utility tase-flag-badge {
+	@apply absolute end-0 bottom-0 z-1 flex items-center justify-center rounded-full;
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+	background-color: var(--tase-flag-color);
+	box-shadow: var(--status-badge-shadow);
+}
+
+/* Label sits to the inline-end of the badge rather than above it: the avatar is
+   at the card's inline-start edge and the card clips overflow, so a label above
+   the badge was cut off. Delays on entry and exit keep it from flickering when
+   the pointer crosses the badge on its way to the avatar. */
+@utility tase-flag-tooltip {
+	@apply text-2xs pointer-events-none invisible absolute inset-s-full z-2 ms-1.5 rounded-md px-2 py-1 whitespace-nowrap opacity-0 transition-opacity delay-300 duration-150;
+	color: var(--color-text);
+	background-color: var(--color-bg-content);
+	border: 1px solid var(--color-border-subtle);
+	box-shadow: var(--shadow-soft);
+	inset-block-start: 50%;
+	translate: 0 -50%;
+
+	.tase-flag-anchor:hover > & {
+		visibility: visible;
+		opacity: 1;
+		transition-delay: 0ms;
+	}
+}
+
+/* Hover target only, so it is larger than the badge to make the tooltip easy
+   to trigger. It paints nothing; the badge is the visible chip. */
+@utility tase-flag-anchor {
+	@apply absolute end-0 bottom-0 z-2 flex cursor-default items-center justify-center;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+}
+
+/* Row is a plain box so the copy button can sit inside it; the toggle is the
+   text button. The row itself is `display: flex` with no wrap, so the text
+   button shrinks (`min-w-0` + `truncate`) and the copy button keeps sitting
+   immediately after whatever width the text actually needs, on either row,
+   independently. */
+
+/* `leading-none` pins each row's line box to the text itself. The rows inherit
+   a 1.4 line-height from the canvas-rendered type, which added leading above and
+   below the glyphs and read as a gap between the username and the id. */
+@utility tase-identity-row {
+	@apply flex min-w-0 items-center gap-1.5 overflow-hidden leading-none;
+	color: var(--color-text);
+}
+
+@utility tase-identity-text {
+	@apply text-sm-plus min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-start leading-none;
+	color: var(--color-text);
+	user-select: text;
+	transition: color 0.15s ease;
+	appearance: none;
+
+	&:hover {
+		color: var(--color-text-heading);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+}
+
+/* Total score badge then the flagged-server count, on their own line above the
+   username so neither crowds the identity rows. `mb-1.5` opens the gap between
+   this line and the username, since the meta row sits furthest from the
+   identity block it describes. */
+@utility tase-account-meta {
+	@apply mb-1.5 flex min-w-0 items-center gap-2;
+	grid-column: 3;
+	grid-row: 1;
+}
+
+@utility tase-identity-primary {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+@utility tase-identity-secondary {
+	@apply -mt-0.5;
+	grid-column: 3;
+	grid-row: 3;
+}
+
+/* Flagged-server count; the severity itself is the badge on the avatar. */
+@utility tase-server-count {
+	@apply text-xs-plus shrink-0 whitespace-nowrap;
+	color: var(--color-text-tertiary);
+}
+
+@utility tase-total-score {
+	@apply text-2xs inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 whitespace-nowrap;
+	color: var(--color-text-secondary);
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility tase-chevron-wrapper {
+	@apply inline-flex shrink-0 transition-transform duration-200;
+}
+
+@utility tase-chevron {
+	@apply shrink-0;
+	color: var(--color-text-tertiary);
+}
+
+/* Percentage of the frame's now-definite 48px box, so the image fills it
+   exactly instead of rendering at its intrinsic Discord size. */
+@utility tase-avatar {
+	@apply object-cover block-full inline-full;
+}
+
+@utility tase-avatar-placeholder {
+	@apply shrink-0 p-1;
+	color: var(--color-text-tertiary);
+}
+
+/* Discord snowflake id: mono and dimmer so it reads as secondary to the name. */
+@utility tase-account-snowflake {
+	@apply text-xs-plus font-mono leading-none;
+	color: var(--color-text-secondary);
+}
+
+@utility tase-account-handle {
+	@apply text-xs-plus ms-1 leading-none font-normal;
+	color: var(--color-text-tertiary);
+}
+
+/* `p-0.5` rather than `p-1`: at p-1 the button is 20px tall (12px icon plus 4px
+   padding each side) against 13px of text, so it — not the type — set each
+   identity row's height and opened a visible gap between the name and the id. */
+@utility tase-copy-btn {
+	@apply cursor-pointer rounded-sm border-none bg-transparent p-0.5;
+	color: var(--color-text-tertiary);
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
+
+	&:hover {
+		color: var(--color-text);
+		background-color: var(--color-hover);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	&.success {
+		color: var(--primitive-green-500);
+	}
+
+	&.error {
+		color: var(--color-status-unsafe);
+	}
+}
+
+/* Wraps to its own line because the card is a flex row around the header. */
+@utility tase-account-content {
+	@apply p-2 pt-0 inline-full;
+}
+
+/* =================================
+   SERVER ITEMS
+   ================================= */
+
+@utility tase-server-item {
+	@apply text-sm-plus mb-1 rounded-md p-1.5;
+	background-color: var(--color-evidence-bg);
+	border: 1px solid var(--color-border-subtle);
+
+	&:last-child {
+		@apply mb-0;
+	}
+}
+
+@utility tase-server-row {
+	@apply flex items-center justify-between gap-2;
+}
+
+/* Icon and name stay glued together on the leading edge. */
+@utility tase-server-info {
+	@apply flex min-w-0 items-center gap-1.5;
+}
+
+@utility tase-server-flag {
+	@apply inline-flex shrink-0 items-center;
+}
+
+@utility tase-server-name {
+	@apply truncate;
+	color: var(--color-text);
+}
+
+@utility tase-server-date {
+	@apply text-2xs flex shrink-0 items-center gap-1 whitespace-nowrap;
+	color: var(--color-text-tertiary);
+}
+
+@utility tase-date-separator {
+	@apply opacity-50;
+}
+
+@utility tase-server-meta {
+	@apply mt-1 flex flex-wrap items-center gap-1;
+}
+
+@utility tase-server-tag {
+	@apply inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5;
+	color: var(--color-text-tertiary);
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility tase-server-id {
+	@apply cursor-pointer border-none font-mono transition-colors;
+
+	&:hover {
+		color: var(--color-text);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	&.success {
+		color: var(--primitive-green-500);
+	}
+
+	&.error {
+		color: var(--color-status-unsafe);
+	}
+}
+
+/* =================================
+   EMPTY STATES
+   ================================= */
+
+@utility tase-no-guilds {
+	@apply py-3 text-center;
+	color: var(--color-text-tertiary);
+}
+
+@utility tase-v2-empty {
+	@apply rounded-md p-3 text-center;
+	color: var(--color-text-tertiary);
+	background-color: var(--color-reason-bg);
+	border: 1px solid var(--color-border-subtle);
+}

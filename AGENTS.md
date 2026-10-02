@@ -87,4 +87,3 @@ Entrypoints are WXT-discovered; `src/entrypoints/` maps 1:1 to runtime contexts:
 - commitlint enforces conventional commits on `commit-msg` (`feat:`, `fix:`, `chore:`, …).
 - `wxt.config.ts` patches emitted chunks to escape Unicode non-characters (`\uFDD0`–`\uFDEF`, `\uFFFE`/`\uFFFF`) and aliases `webgl-obj-loader` to its unminified dist — both are required for MV3 CSP / Chrome content-script loading. Don't remove them.
 - CSS minification is `lightningcss` (not esbuild/terser) with explicit browser targets.
-- Group API implementation details are documented in `SCSN-GROUP-API.md`.

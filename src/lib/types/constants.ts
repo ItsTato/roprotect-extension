@@ -71,7 +71,12 @@ export const API_CONFIG = {
 		LOOKUP_OUTFITS_BY_ID: '/v1/lookup/outfits/by-id',
 		EXTENSION_MEMBERSHIP_STATUS: '/v1/extension/membership/status',
 		EXTENSION_MEMBERSHIP_BADGE: '/v1/extension/membership/badge',
-		EXTENSION_MEMBERSHIP_VERIFICATION: '/v1/extension/membership/verification'
+		EXTENSION_MEMBERSHIP_VERIFICATION: '/v1/extension/membership/verification',
+		// TASE V2 endpoints
+		TASE_V2_USER_CHECK: '/v1/tase/v2/lookup/user',
+		TASE_V2_BATCH_CHECK: '/v1/tase/v2/lookup/users',
+		// Discord avatar endpoint
+		DISCORD_AVATAR_BATCH: '/v1/discord/v1/get_user_avatar_link'
 	},
 	BATCH_SIZE: 100,
 	BATCH_DELAY: 250,
@@ -109,7 +114,8 @@ export const API_ACTIONS = {
 	EXTENSION_CONFIRM_MEMBERSHIP_VERIFICATION: 'extensionConfirmMembershipVerification',
 	HAS_TRANSLATE_PERMISSION: 'hasTranslatePermission',
 	REQUEST_TRANSLATE_PERMISSION: 'requestTranslatePermission',
-	API_WHOAMI: 'apiWhoami'
+	API_WHOAMI: 'apiWhoami',
+	GET_DISCORD_AVATARS: 'getDiscordAvatars'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {

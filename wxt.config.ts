@@ -69,7 +69,13 @@ export default defineConfig({
 			version: '2.20.0',
 			minimum_chrome_version: '128',
 			permissions: ['storage', 'notifications', ...robloxFetch],
-			host_permissions: [`https://${apiDomain}/*`, 'https://cdn.rotector.com/*'],
+			host_permissions: [
+				`https://${apiDomain}/*`,
+				'https://cdn.rotector.com/*',
+				// Needed so the background can inline Discord avatars as data URLs:
+				// roblox.com's page CSP blocks cdn.discordapp.com in img-src.
+				'https://cdn.discordapp.com/*'
+			],
 			...(manifestVersion === 2
 				? { optional_permissions: optionalHosts }
 				: { optional_host_permissions: optionalHosts }),

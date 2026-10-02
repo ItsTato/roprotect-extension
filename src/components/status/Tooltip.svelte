@@ -1,11 +1,17 @@
 <script lang="ts">
-	import { ENTITY_TYPES, REASON_KEYS, STATUS, type StatusFlag } from '@/lib/types/constants';
+	import {
+		ENTITY_TYPES,
+		REASON_KEYS,
+		STATUS,
+		API_ACTIONS,
+		type StatusFlag
+	} from '@/lib/types/constants';
 	import {
 		getCategoryTextKey,
 		MIXED_GROUP,
 		STATUS_FLAG_PRESENTATION
 	} from '@/lib/utils/status/status-config';
-	import type { ReviewerInfo, UserStatus } from '@/lib/types/api';
+	import type { ReviewerInfo, UserStatus, ApiResponse } from '@/lib/types/api';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { extractErrorMessage, sanitizeEntityId } from '@/lib/utils/dom/sanitizer';
 	import { calculateStatusBadges } from '@/lib/utils/status/status-utils';
@@ -28,6 +34,8 @@
 		formatViolationReasons,
 		groupSourceLines
 	} from '@/lib/utils/status/violation-formatter';
+	import type { TaseUserRecord, DiscordAvatar } from '@/lib/schemas/custom-api';
+	import TaseV2Display from './TaseV2Display.svelte';
 	import {
 		detectPageContext,
 		extractGroupInfo,
@@ -205,6 +213,13 @@
 		primaryDataUrl: string | null;
 		rawUrls: string[];
 	} | null>(null);
+
+	let taseV2Record: TaseUserRecord | null = $state(null);
+	let taseAvatars: Record<string, DiscordAvatar> = $state({});
+	let latestTaseV2LoadId = 0;
+
+	// Documented cap for POST /v1/discord/v1/get_user_avatar_link.
+	const DISCORD_AVATAR_BATCH_LIMIT = 100;
 
 	let expandedOriginals = new SvelteSet<string>();
 
@@ -1087,6 +1102,62 @@
 		void loadOutfitSnapshots();
 	});
 
+	$effect(() => {
+		// Fetch TASE V2 data when on the TASE tab and we have a user status with detections
+		if (activeTab !== 'system-tase' || !activeUserStatus || isGroup) return;
+		if (!('detections' in activeUserStatus) || !activeUserStatus.detections) return;
+
+		const loadId = ++latestTaseV2LoadId;
+		async function fetchTaseV2Data() {
+			try {
+				const taseRecord = activeUserStatus as unknown as TaseUserRecord;
+				if (loadId !== latestTaseV2LoadId) return;
+				taseV2Record = taseRecord;
+
+				const discordIds = Object.keys(taseRecord.detections);
+				if (discordIds.length === 0) {
+					if (loadId === latestTaseV2LoadId) {
+						taseAvatars = {};
+					}
+					return;
+				}
+
+				// clientId must be omitted rather than sent as null: ContentMessageSchema
+				// types it as optional string, so an explicit null fails validation and the
+				// background never answers. The route also caps a batch at 100 ids.
+				const batches = [];
+				for (let i = 0; i < discordIds.length; i += DISCORD_AVATAR_BATCH_LIMIT) {
+					batches.push(discordIds.slice(i, i + DISCORD_AVATAR_BATCH_LIMIT));
+				}
+
+				const results = await Promise.all(
+					batches.map(async (batch): Promise<Record<string, DiscordAvatar>> => {
+						const response: ApiResponse<Record<string, DiscordAvatar>> =
+							await browser.runtime.sendMessage({
+								action: API_ACTIONS.GET_DISCORD_AVATARS,
+								discordUserIds: batch
+							});
+						return response.success && response.data ? response.data : {};
+					})
+				);
+
+				if (loadId !== latestTaseV2LoadId) return;
+				const merged: Record<string, DiscordAvatar> = {};
+				for (const batch of results) {
+					for (const [discordId, avatar] of Object.entries(batch)) {
+						merged[discordId] = avatar;
+					}
+				}
+				taseAvatars = merged;
+			} catch (error) {
+				logger.error('Failed to fetch TASE V2 data:', error);
+				taseAvatars = {};
+			}
+		}
+
+		void fetchTaseV2Data();
+	});
+
 	// Anti-forgery watermark covering every user-visible zone of the tooltip
 	$effect(() => {
 		if (!activeStatus) return;
@@ -1537,122 +1608,125 @@
 												)}
 												robloxUserId={Number.parseInt(sanitizedUserId, 10)}
 											/>
-										{/if}
-										{#each renderedEvidence as evidence, index (index)}
-											{#if evidence.type === 'outfit' && evidence.outfitName && evidence.outfitReason}
-												{@const outfitName = evidence.outfitName}
-												{@const outfitReason = evidence.outfitReason}
-												{@const outfitId = evidence.outfitId ?? null}
-												{@const snapshot = resolveSnapshot(outfitName, outfitId)}
-												{@const snapshotCount = snapshot?.rawUrls.length ?? 0}
-												{@const primaryDataUrl = snapshot?.primaryDataUrl ?? null}
-												{@const hasPrimary = primaryDataUrl !== null}
-												{@const isMultiSnapshot = snapshotCount > 1}
-												<div class="outfit-evidence-item">
-													<button
-														class="outfit-snapshot-thumb"
-														class:outfit-snapshot-thumb-empty={!hasPrimary}
-														disabled={!hasPrimary}
-														onclick={(e) => {
-															e.stopPropagation();
-															openOutfitLightbox(
-																outfitName,
-																outfitReason,
-																evidence.outfitConfidence ?? null,
-																outfitId
-															);
-														}}
-														type="button"
-													>
-														{#if loadingOutfitSnapshots && !outfitSnapshotMaps}
-															<div class="outfit-snapshot-skeleton"></div>
-														{:else if hasPrimary}
-															<img
-																class="outfit-snapshot-img"
-																alt={getDisplayText(outfitName)}
-																decoding="async"
-																loading="lazy"
-																src={primaryDataUrl}
-															/>
-															{#if isMultiSnapshot}
-																<div class="outfit-snapshot-multi-overlay">
-																	<span class="outfit-snapshot-count">
-																		{snapshotCount}
-																	</span>
-																	<span class="outfit-snapshot-count-label">
-																		{$_('tooltip_outfit_snapshot_count_label')}
-																	</span>
-																</div>
-															{/if}
-														{:else}
-															<Shirt class="outfit-snapshot-placeholder-icon" size={20} />
-														{/if}
-													</button>
-													<div class="outfit-evidence-body">
-														<div class="outfit-evidence-header">
-															<div class="outfit-evidence-name">
-																{getDisplayText(outfitName)}
-															</div>
-															{#if evidence.outfitConfidence !== null}
-																<div class="outfit-confidence-badge">
-																	{evidence.outfitConfidence}
-																	%
-																</div>
-															{/if}
-														</div>
-														<div class="outfit-reason">
-															<CanvasText multiline text={getDisplayText(outfitReason)} />
-														</div>
-													</div>
-												</div>
-											{:else}
-												{@const decodeEntry = evidenceEncodingMap.get(evidence.content)}
-												{#if decodeEntry}
-													{@const toggleKey = `${reason.typeName}:${String(index)}`}
-													{@const isOriginalShown = expandedOriginals.has(toggleKey)}
-													<div
-														class="decoded-evidence-item"
-														data-encoded-original={evidence.content}
-													>
-														<div class="decoded-evidence-text">
-															<CanvasText multiline text={getDisplayText(decodeEntry.decoded)} />
-														</div>
+										{:else if activeTab === 'system-tase' && taseV2Record}
+											<TaseV2Display avatars={taseAvatars} taseRecord={taseV2Record} />
+										{:else}
+											{#each renderedEvidence as evidence, index (index)}
+												{#if evidence.type === 'outfit' && evidence.outfitName && evidence.outfitReason}
+													{@const outfitName = evidence.outfitName}
+													{@const outfitReason = evidence.outfitReason}
+													{@const outfitId = evidence.outfitId ?? null}
+													{@const snapshot = resolveSnapshot(outfitName, outfitId)}
+													{@const snapshotCount = snapshot?.rawUrls.length ?? 0}
+													{@const primaryDataUrl = snapshot?.primaryDataUrl ?? null}
+													{@const hasPrimary = primaryDataUrl !== null}
+													{@const isMultiSnapshot = snapshotCount > 1}
+													<div class="outfit-evidence-item">
 														<button
-															class="decoded-evidence-chip"
-															onmousedown={(e) => {
+															class="outfit-snapshot-thumb"
+															class:outfit-snapshot-thumb-empty={!hasPrimary}
+															disabled={!hasPrimary}
+															onclick={(e) => {
 																e.stopPropagation();
-																e.preventDefault();
-																toggleOriginal(toggleKey);
+																openOutfitLightbox(
+																	outfitName,
+																	outfitReason,
+																	evidence.outfitConfidence ?? null,
+																	outfitId
+																);
 															}}
 															type="button"
 														>
-															{#if isOriginalShown}
-																<Lock size={11} />
-																<span>{$_(DETECTED_CHIP_KEYS[decodeEntry.encoding.type])}</span>
-																<span class="decoded-evidence-action"
-																	>{$_('tooltip_evidence_hide_original')}</span
-																>
+															{#if loadingOutfitSnapshots && !outfitSnapshotMaps}
+																<div class="outfit-snapshot-skeleton"></div>
+															{:else if hasPrimary}
+																<img
+																	class="outfit-snapshot-img"
+																	alt={getDisplayText(outfitName)}
+																	decoding="async"
+																	loading="lazy"
+																	src={primaryDataUrl}
+																/>
+																{#if isMultiSnapshot}
+																	<div class="outfit-snapshot-multi-overlay">
+																		<span class="outfit-snapshot-count">
+																			{snapshotCount}
+																		</span>
+																		<span class="outfit-snapshot-count-label">
+																			{$_('tooltip_outfit_snapshot_count_label')}
+																		</span>
+																	</div>
+																{/if}
 															{:else}
-																<LockOpen size={11} />
-																<span>{getDecodedChipLabel(decodeEntry.encoding)}</span>
-																<span class="decoded-evidence-action"
-																	>{$_('cipher_chip_show_original')}</span
-																>
+																<Shirt class="outfit-snapshot-placeholder-icon" size={20} />
 															{/if}
 														</button>
-														{#if isOriginalShown}
-															<div class="decoded-evidence-original">
-																<CanvasText multiline text={evidence.content} />
+														<div class="outfit-evidence-body">
+															<div class="outfit-evidence-header">
+																<div class="outfit-evidence-name">
+																	{getDisplayText(outfitName)}
+																</div>
+																{#if evidence.outfitConfidence !== null}
+																	<div class="outfit-confidence-badge">
+																		{evidence.outfitConfidence}
+																		%
+																	</div>
+																{/if}
 															</div>
-														{/if}
+															<div class="outfit-reason">
+																<CanvasText multiline text={getDisplayText(outfitReason)} />
+															</div>
+														</div>
 													</div>
 												{:else}
-													<div class="evidence-item">
-														<CanvasText multiline text={getDisplayText(evidence.content)} />
-													</div>
+													{@const decodeEntry = evidenceEncodingMap.get(evidence.content)}
+													{#if decodeEntry}
+														{@const toggleKey = `${reason.typeName}:${String(index)}`}
+														{@const isOriginalShown = expandedOriginals.has(toggleKey)}
+														<div
+															class="decoded-evidence-item"
+															data-encoded-original={evidence.content}
+														>
+															<div class="decoded-evidence-text">
+																<CanvasText multiline text={getDisplayText(decodeEntry.decoded)} />
+															</div>
+															<button
+																class="decoded-evidence-chip"
+																onmousedown={(e) => {
+																	e.stopPropagation();
+																	e.preventDefault();
+																	toggleOriginal(toggleKey);
+																}}
+																type="button"
+															>
+																{#if isOriginalShown}
+																	<Lock size={11} />
+																	<span>{$_(DETECTED_CHIP_KEYS[decodeEntry.encoding.type])}</span>
+																	<span class="decoded-evidence-action"
+																		>{$_('tooltip_evidence_hide_original')}</span
+																	>
+																{:else}
+																	<LockOpen size={11} />
+																	<span>{getDecodedChipLabel(decodeEntry.encoding)}</span>
+																	<span class="decoded-evidence-action"
+																		>{$_('cipher_chip_show_original')}</span
+																	>
+																{/if}
+															</button>
+															{#if isOriginalShown}
+																<div class="decoded-evidence-original">
+																	<CanvasText multiline text={evidence.content} />
+																</div>
+															{/if}
+														</div>
+													{:else}
+														<div class="evidence-item">
+															<CanvasText multiline text={getDisplayText(evidence.content)} />
+														</div>
+													{/if}
 												{/if}
-											{/if}
-										{/each}
+											{/each}
+										{/if}
 									</div>
 								{/if}
 							</div>

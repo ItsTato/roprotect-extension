@@ -4,6 +4,76 @@ import type { CustomApiAuthHeaderType } from '../types/custom-api';
 
 const KNOWN_FLAGS = Object.values(STATUS.FLAGS);
 
+const TaseDetectionTypeSchema = v.object({
+	id: v.nullish(v.string()),
+	name: v.string(),
+	summary: v.nullish(v.string())
+});
+
+const TaseGuildDetectionSchema = v.object({
+	category: v.nullish(v.union([v.number(), v.string()])),
+	firstSeenAt: v.nullish(v.number()),
+	flag_type: v.picklist(['unsafe', 'past_offender']),
+	guildId: v.string(),
+	guildName: v.nullish(v.string()),
+	lastSeenAt: v.nullish(v.number()),
+	score: v.nullish(v.number()),
+	types: v.nullish(v.array(TaseDetectionTypeSchema)),
+	versions: v.nullish(v.array(v.number()))
+});
+
+const TaseDiscordAccountSchema = v.object({
+	detectedGuilds: v.array(TaseGuildDetectionSchema)
+});
+
+const TaseUserRecordSchema = v.object({
+	badges: v.nullish(
+		v.array(
+			v.object({
+				text: v.string(),
+				color: v.nullish(v.string()),
+				textColor: v.nullish(v.string())
+			})
+		)
+	),
+	category: v.nullish(v.union([v.number(), v.string()])),
+	confidence: v.nullish(v.number()),
+	detections: v.record(v.string(), TaseDiscordAccountSchema),
+	engineVersion: v.nullish(v.string()),
+	firstSeenAt: v.nullish(v.number()),
+	flagType: v.fallback(v.picklist(KNOWN_FLAGS), STATUS.FLAGS.UNKNOWN),
+	id: v.number(),
+	isLocked: v.nullish(v.boolean()),
+	isReportable: v.nullish(v.boolean()),
+	lastSeenAt: v.nullish(v.number()),
+	lastUpdated: v.nullish(v.number()),
+	reasons: v.nullish(v.record(v.string(), v.unknown())),
+	reviewer: v.nullish(
+		v.object({
+			username: v.string(),
+			displayName: v.string()
+		})
+	),
+	versionCompatibility: v.nullish(v.picklist(['current', 'compatible', 'outdated', 'unknown']))
+});
+
+// Every field is optional: the avatar batch route omits `avatarHash` for users
+// with a default avatar and omits `username`/`globalName`/`displayName` entirely
+// when Discord has no cached profile for that id. A single missing key must not
+// fail the whole map, otherwise every account in the tooltip loses its avatar.
+const DiscordAvatarSchema = v.object({
+	avatarHash: v.nullish(v.string()),
+	avatarUrl: v.nullish(v.string()),
+	isAnimated: v.nullish(v.boolean()),
+	userId: v.nullish(v.string()),
+	username: v.nullish(v.string()),
+	globalName: v.nullish(v.string()),
+	displayName: v.nullish(v.string()),
+	// Not part of the API payload: filled in by the background so the tooltip can
+	// render the avatar despite roblox.com's CSP blocking cdn.discordapp.com.
+	avatarDataUrl: v.optional(v.nullish(v.string()))
+});
+
 const AUTH_HEADER_TYPES: readonly CustomApiAuthHeaderType[] = [
 	'x-auth-token',
 	'authorization-bearer',
@@ -45,6 +115,21 @@ const UserStatusResponseSchema = v.object({
 			v.array(CustomApiBadgeSchema, 'Invalid "badges" field (must be array)'),
 			v.maxLength(3, 'Too many badges (maximum 3 allowed)')
 		)
+	),
+	// TASE V2 specific fields
+	detections: v.optional(v.record(v.string(), TaseDiscordAccountSchema)),
+	firstSeenAt: v.nullish(v.number()),
+	lastSeenAt: v.nullish(v.number()),
+	lastUpdated: v.nullish(v.number()),
+	engineVersion: v.nullish(v.string()),
+	isLocked: v.nullish(v.boolean()),
+	isReportable: v.nullish(v.boolean()),
+	versionCompatibility: v.nullish(v.picklist(['current', 'compatible', 'outdated', 'unknown'])),
+	reviewer: v.nullish(
+		v.object({
+			username: v.string(),
+			displayName: v.string()
+		})
 	)
 });
 
@@ -121,7 +206,15 @@ export const PersistedCustomApiSchema = v.object({
 });
 
 export type ImportedApiConfig = v.InferOutput<typeof ImportedApiConfigSchema>;
+export type TaseUserRecord = v.InferOutput<typeof TaseUserRecordSchema>;
+export type TaseDiscordAccount = v.InferOutput<typeof TaseDiscordAccountSchema>;
+export type TaseGuildDetection = v.InferOutput<typeof TaseGuildDetectionSchema>;
+export type TaseDetectionType = v.InferOutput<typeof TaseDetectionTypeSchema>;
+export type DiscordAvatar = v.InferOutput<typeof DiscordAvatarSchema>;
 
 export const parseUserStatusResponse = v.parser(UserStatusResponseSchema);
 export const parseImportedApiConfig = v.parser(ImportedApiConfigSchema);
 export const parsePersistedCustomApis = v.parser(v.array(PersistedCustomApiSchema));
+export const parseTaseUserRecord = v.parser(TaseUserRecordSchema);
+export const parseDiscordAvatar = v.parser(DiscordAvatarSchema);
+export const parseDiscordAvatarMap = v.parser(v.record(v.string(), DiscordAvatarSchema));

@@ -21,6 +21,8 @@ import {
 	parseUserStatus,
 	parseUserStatusMap
 } from '@/lib/schemas/rotector';
+import { parseDiscordAvatarMap, type DiscordAvatar } from '@/lib/schemas/custom-api';
+import { fetchImageAsDataUrl } from '@/lib/utils/image';
 import { makeHttpRequest } from '../http-client';
 import { processBatchEntityIds, validateEntityId } from '@/lib/utils/dom/sanitizer';
 import { logger } from '@/lib/utils/logging/logger';
@@ -242,4 +244,60 @@ export async function lookupRobloxUserDiscord(
 		clientId,
 		parse: parseRobloxUserDiscordLookup
 	});
+}
+
+const DISCORD_CDN = 'https://cdn.discordapp.com/avatars';
+
+// The batch route only guarantees `avatarUrl` for users with a cached avatar.
+// Rebuild the CDN path from the hash when it sends the hash alone.
+function resolveAvatarUrl(discordId: string, avatar: DiscordAvatar): string | null {
+	if (avatar.avatarUrl) return avatar.avatarUrl;
+	if (!avatar.avatarHash) return null;
+	return `${DISCORD_CDN}/${discordId}/${avatar.avatarHash}.${avatar.isAnimated ? 'gif' : 'png'}`;
+}
+
+// The tooltip is injected into roblox.com, whose page CSP omits
+// cdn.discordapp.com from `img-src`, so a plain cross-origin <img> is blocked.
+// `data:` is allowed, so inline the bytes here in the extension context instead
+// of letting the page request them.
+async function inlineAvatarImages(
+	avatars: Record<string, DiscordAvatar>
+): Promise<Record<string, DiscordAvatar>> {
+	const entries = await Promise.all(
+		Object.entries(avatars).map(async ([discordId, avatar]) => {
+			const url = resolveAvatarUrl(discordId, avatar);
+			if (!url) return [discordId, avatar] as const;
+			try {
+				const avatarDataUrl = await fetchImageAsDataUrl(url);
+				return [discordId, { ...avatar, avatarDataUrl }] as const;
+			} catch (error) {
+				logger.error('Failed to inline Discord avatar', { discordId, url, error });
+				return [discordId, avatar] as const;
+			}
+		})
+	);
+
+	const result: Record<string, DiscordAvatar> = {};
+	for (const [discordId, avatar] of entries) {
+		result[discordId] = avatar;
+	}
+	return result;
+}
+
+export async function getDiscordAvatars(
+	discordUserIds: string[],
+	clientId?: string
+): Promise<Record<string, DiscordAvatar>> {
+	const requestBody = { ids: discordUserIds };
+	const avatars = await makeHttpRequest(API_CONFIG.ENDPOINTS.DISCORD_AVATAR_BATCH, {
+		method: 'POST',
+		body: JSON.stringify(requestBody),
+		clientId,
+		// This route answers with the bare id -> avatar map, not the usual
+		// { success, data } envelope, so envelope unwrapping has to be skipped.
+		rawResponse: true,
+		parse: parseDiscordAvatarMap
+	});
+
+	return inlineAvatarImages(avatars);
 }

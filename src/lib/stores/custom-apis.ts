@@ -141,11 +141,24 @@ function createSystemApisFromWhoami(whoami: WhoamiData, apiKey: string): CustomA
 
 	return SERVICE_ORDER.filter((id) => whoami.services.includes(id)).map((id, index) => {
 		const endpoint = whoami.endpoints[id];
-		const singleUrl = resolveEndpoint(endpoint?.single, `/v1/${id}/v1/lookup/user/{userId}`);
-		const batchUrl = resolveEndpoint(endpoint?.batch, `/v1/${id}/v1/lookup/users`);
+		// TASE now uses V2 endpoints: /v1/tase/v2/lookup/user/{userId} and /v1/tase/v2/lookup/users
+		// Always use V2 for TASE, ignoring what whoami returns (it may have v1 paths)
+		const isTase = id === 'tase';
+		const singleFallback = isTase
+			? '/v1/tase/v2/lookup/user/{userId}'
+			: `/v1/${id}/v1/lookup/user/{userId}`;
+		const batchFallback = isTase ? '/v1/tase/v2/lookup/users' : `/v1/${id}/v1/lookup/users`;
+		// For TASE, always use V2 fallback; for others, use whoami if it provides a path
+		const singleUrl = isTase
+			? resolveEndpoint(undefined, singleFallback)
+			: resolveEndpoint(endpoint?.single, singleFallback);
+		const batchUrl = isTase
+			? resolveEndpoint(undefined, batchFallback)
+			: resolveEndpoint(endpoint?.batch, batchFallback);
 		logger.debug(`[createSystemApisFromWhoami] Service ${id} endpoint:`, {
 			single: singleUrl,
-			batch: batchUrl
+			batch: batchUrl,
+			isTaseV2: isTase
 		});
 		return {
 			id: `system-${id}`,

@@ -3,7 +3,11 @@ import { API_ACTIONS, CAPTCHA_MESSAGES } from '@/lib/types/constants';
 import { PersistedCustomApiSchema } from './custom-api';
 
 const UserId = v.union([v.string(), v.number()]);
-const ClientId = v.optional(v.string());
+// `nullish`, not just `optional`: callers that spread an absent logged-in id
+// (e.g. `{ clientId: getLoggedInUserId() }`) send an explicit null. Rejecting
+// that fails the whole message, so the background never replies and the caller
+// hangs on a silent "Receiving end does not exist".
+const ClientId = v.optional(v.nullish(v.string()));
 
 const QueueDataSchema = v.object({
 	userId: v.string(),
@@ -146,6 +150,11 @@ const ContentMessageSchema = v.variant('action', [
 	}),
 	v.object({
 		action: v.literal(API_ACTIONS.REQUEST_TRANSLATE_PERMISSION),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.GET_DISCORD_AVATARS),
+		discordUserIds: v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(100)),
 		clientId: ClientId
 	})
 ]);
