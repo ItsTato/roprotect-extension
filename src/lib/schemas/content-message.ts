@@ -3,7 +3,11 @@ import { API_ACTIONS, CAPTCHA_MESSAGES } from '@/lib/types/constants';
 import { PersistedCustomApiSchema } from './custom-api';
 
 const UserId = v.union([v.string(), v.number()]);
-const ClientId = v.optional(v.string());
+// `nullish`, not just `optional`: callers that spread an absent logged-in id
+// (e.g. `{ clientId: getLoggedInUserId() }`) send an explicit null. Rejecting
+// that fails the whole message, so the background never replies and the caller
+// hangs on a silent "Receiving end does not exist".
+const ClientId = v.optional(v.nullish(v.string()));
 
 const QueueDataSchema = v.object({
 	userId: v.string(),
@@ -25,6 +29,11 @@ const ContentMessageSchema = v.variant('action', [
 		action: v.literal(API_ACTIONS.CHECK_USER_STATUS),
 		userId: UserId,
 		apiConfig: v.optional(PersistedCustomApiSchema),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.API_WHOAMI),
+		apiKey: v.string(),
 		clientId: ClientId
 	}),
 	v.object({
@@ -69,19 +78,7 @@ const ContentMessageSchema = v.variant('action', [
 		clientId: ClientId
 	}),
 	v.object({
-		action: v.literal(API_ACTIONS.SUBMIT_VOTE),
-		userId: UserId,
-		voteType: v.number(),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_VOTES),
-		userId: UserId,
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_STATS),
-		hours: v.picklist([24, 168, 720]),
+		action: v.literal(API_ACTIONS.GET_USAGE),
 		clientId: ClientId
 	}),
 	v.object({
@@ -156,56 +153,8 @@ const ContentMessageSchema = v.variant('action', [
 		clientId: ClientId
 	}),
 	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_CHALLENGE),
-		robloxUserId: v.pipe(v.number(), v.minValue(1)),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_VERIFY),
-		challengeId: v.string(),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_EXCHANGE),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_LOGOUT),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ROBLOX_AUTH_LOGOUT_ALL),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_GET_PROFILE),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_UPDATE_SETTINGS),
-		alias: v.optional(v.nullable(v.string())),
-		showUsername: v.optional(v.boolean()),
-		showThumbnail: v.optional(v.boolean()),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_REFRESH_IDENTITY),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_LIST_SESSIONS),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.ME_REVOKE_SESSION),
-		sessionId: v.pipe(v.string(), v.regex(/^[0-9a-f]{12}$/)),
-		clientId: ClientId
-	}),
-	v.object({
-		action: v.literal(API_ACTIONS.GET_LEADERBOARD),
-		window: v.picklist(['daily', 'weekly', 'monthly', 'yearly', 'all_time']),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100))),
-		cursor: v.optional(v.pipe(v.number(), v.minValue(0))),
+		action: v.literal(API_ACTIONS.GET_DISCORD_AVATARS),
+		discordUserIds: v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(100)),
 		clientId: ClientId
 	})
 ]);

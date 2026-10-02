@@ -176,12 +176,28 @@ export function getStatusConfig(
 
 	const activeStatus = status ?? cachedStatus;
 
-	if (loading || !activeStatus) {
+	if (loading) {
 		return {
 			iconName: 'loading',
 			iconColor: '#666',
 			textContent: t('tooltip_status_checking'),
 			textClass: '',
+			categoryLabel: null,
+			confidence: null,
+			isReportable: false,
+			isQueued: false,
+			isOutfitOnly: false
+		};
+	}
+
+	if (!activeStatus) {
+		// No data means the group isn't tracked by SCSN → treat as safe/clean.
+		// Use the SAFE presentation so there's no alarming orange "unknown" icon.
+		return {
+			iconName: 'safe',
+			iconColor: '#16a34a',
+			textContent: t('tooltip_status_not_flagged'),
+			textClass: STATUS_TEXT_SAFE_CLASS,
 			categoryLabel: null,
 			confidence: null,
 			isReportable: false,

@@ -34,6 +34,14 @@ export function startGroupQuery(groupId: string): GroupQuerySubscription {
 			.getStatus(groupId)
 			.then((status) => {
 				if (cancelled) return;
+				// status can be null (no-record / no-data). wrapGroupStatus(null, false)
+				// returns null, so we'd emit nothing and leave the loading badge forever.
+				// Emit an empty map to clear the loading state; the UI then shows
+				// "No data available" via its fallback.
+				if (status === null) {
+					emit(new Map());
+					return;
+				}
 				const wrapped = wrapGroupStatus(status, false);
 				if (wrapped) emit(wrapped);
 			})

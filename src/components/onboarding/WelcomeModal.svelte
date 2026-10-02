@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
-	import { LEGAL_URLS } from '@/lib/types/constants';
 	import AckCheckbox from '@/components/ui/AckCheckbox.svelte';
 	import AppLogo from '@/components/ui/AppLogo.svelte';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
@@ -41,11 +40,11 @@
 		<AckCheckbox textClass="onboarding-agreement-text" bind:checked={tosAccepted}>
 			{#snippet label()}
 				{$_('onboarding_welcome_agree_tos')}
-				<ExtLink href={LEGAL_URLS.terms}>
+				<ExtLink href="https://discord.gg/ZwJbrWHPVz">
 					{$_('onboarding_welcome_terms')}
 				</ExtLink>
 				{$_('onboarding_welcome_and')}
-				<ExtLink href={LEGAL_URLS.privacy}>
+				<ExtLink href="https://discord.gg/ZwJbrWHPVz">
 					{$_('onboarding_welcome_privacy')}
 				</ExtLink>
 			{/snippet}

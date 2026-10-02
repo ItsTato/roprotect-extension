@@ -6,9 +6,12 @@
 	import TurndownService from 'turndown';
 	import { _ } from 'svelte-i18n';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
+	import { API_CONFIG } from '@/lib/types/constants';
 	import { logger } from '@/lib/utils/logging/logger';
 
-	const ROTECTOR_DOCS_URL = 'https://roscoe.rotector.com/docs';
+	// Derived from the active API host so the reference link follows the dev/prod switch
+	// and can never drift from the base URL the extension actually calls.
+	const ROPROTECT_DOCS_URL = `${API_CONFIG.BASE_URL}/docs`;
 
 	const SECTIONS = [
 		{ id: 'overview', labelKey: 'custom_api_docs_toc_overview' },
@@ -272,8 +275,8 @@
 				<p class="docs-note">{$_('custom_api_docs_note_overview_what')}</p>
 				<p class="docs-note">{$_('custom_api_docs_note_overview_scope')}</p>
 				<p class="docs-note">{$_('custom_api_docs_note_overview_reference')}</p>
-				<ExtLink class="docs-external-link-block" href={ROTECTOR_DOCS_URL}>
-					<span>{ROTECTOR_DOCS_URL}</span>
+				<ExtLink class="docs-external-link-block" href={ROPROTECT_DOCS_URL}>
+					<span>{ROPROTECT_DOCS_URL}</span>
 					<ExternalLink size={11} />
 				</ExtLink>
 			</section>

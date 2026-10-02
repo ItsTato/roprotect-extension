@@ -1,24 +1,8 @@
 import type { UserStatus, GroupStatus } from '../../types/api';
 import type { CombinedStatus, CustomApiResult } from '../../types/custom-api';
-import { ROTECTOR_API_ID } from '../../stores/custom-apis';
+import { RO_PROTECT_API_ID } from '../../stores/custom-apis';
 import { getAssetUrl } from '../assets';
 import { REASON_KEYS, STATUS } from '../../types/constants';
-
-const ACTIONABLE_FLAG_TYPES = new Set<number>([
-	STATUS.FLAGS.UNSAFE,
-	STATUS.FLAGS.PENDING,
-	STATUS.FLAGS.MIXED,
-	STATUS.FLAGS.REDACTED
-]);
-
-// Same actionable set ordered most severe first, so a user flagged by several custom APIs is
-// bucketed by its worst verdict rather than by whichever API happened to answer first
-const ACTIONABLE_FLAG_SEVERITY: readonly number[] = [
-	STATUS.FLAGS.UNSAFE,
-	STATUS.FLAGS.REDACTED,
-	STATUS.FLAGS.MIXED,
-	STATUS.FLAGS.PENDING
-];
 
 export const FIRST_DETECTION_FLAG_TYPES = new Set<number>([
 	STATUS.FLAGS.UNSAFE,
@@ -29,33 +13,21 @@ export const FIRST_DETECTION_FLAG_TYPES = new Set<number>([
 	STATUS.FLAGS.REDACTED
 ]);
 
-// Check if an individual API result has flagged the entity
-export function isActionableResult<T extends UserStatus | GroupStatus>(
-	result: CustomApiResult<T>
-): boolean {
-	return !!result.data && ACTIONABLE_FLAG_TYPES.has(result.data.flagType);
-}
-
-interface StatusBadges {
-	isReportable: boolean;
-	isOutfitOnly: boolean;
-	hasCrossSignal: boolean;
-}
-
 // Create a CombinedStatus representing an error state (e.g., restricted access)
 export function createErrorCombinedStatus<T extends UserStatus | GroupStatus>(
 	error: string
 ): CombinedStatus<T> {
+	const id = RO_PROTECT_API_ID;
 	return new Map([
 		[
-			ROTECTOR_API_ID,
+			id,
 			{
-				apiId: ROTECTOR_API_ID,
-				apiName: 'Rotector',
+				apiId: id,
+				apiName: 'RoProtect',
 				error,
 				loading: false,
 				timestamp: Date.now(),
-				landscapeImageDataUrl: getAssetUrl('/assets/rotector-tab.webp')
+				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 			}
 		]
 	]);
@@ -72,14 +44,15 @@ export function wrapGroupStatus(
 	}
 
 	if (isLoading) {
+		const id = RO_PROTECT_API_ID;
 		return new Map([
 			[
-				ROTECTOR_API_ID,
+				id,
 				{
-					apiId: ROTECTOR_API_ID,
-					apiName: 'Rotector',
+					apiId: id,
+					apiName: 'RoProtect',
 					loading: true,
-					landscapeImageDataUrl: getAssetUrl('/assets/rotector-tab.webp')
+					landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 				}
 			]
 		]);
@@ -87,16 +60,17 @@ export function wrapGroupStatus(
 
 	if (!groupStatus) return null;
 
+	const id = RO_PROTECT_API_ID;
 	return new Map([
 		[
-			ROTECTOR_API_ID,
+			id,
 			{
-				apiId: ROTECTOR_API_ID,
-				apiName: 'Rotector',
+				apiId: id,
+				apiName: 'RoProtect',
 				data: groupStatus,
 				loading: false,
 				timestamp: Date.now(),
-				landscapeImageDataUrl: getAssetUrl('/assets/rotector-tab.webp')
+				landscapeImageDataUrl: getAssetUrl('/assets/sigmanet-dark.png')
 			}
 		]
 	]);
@@ -140,41 +114,35 @@ export function isFlagged<T extends UserStatus | GroupStatus>(
 	return [...status.values()].some(isActionableResult);
 }
 
-// First actionable API result. Prefers Rotector, then any custom API.
+// First actionable API result. Prefers system APIs in order: SIGMANET, RAB, TASE, then any custom API.
 export function getFlaggingResult<T extends UserStatus | GroupStatus>(
 	status: CombinedStatus<T> | null
 ): CustomApiResult<T> | undefined {
 	if (!status) return undefined;
 
-	const rotector = status.get(ROTECTOR_API_ID);
-	if (rotector && isActionableResult(rotector)) {
-		return rotector;
+	// System APIs have priority in order: scsn > rab > tase
+	const systemOrder = ['system-scsn', 'system-rab', 'system-tase'];
+
+	for (const id of systemOrder) {
+		const result = status.get(id);
+		if (result && isActionableResult(result)) {
+			return result;
+		}
 	}
 
+	// Fall back to any other system API
+	for (const [_id, result] of status.entries()) {
+		if (result.apiId.startsWith('system-') && isActionableResult(result)) {
+			return result;
+		}
+	}
+
+	// Then any custom API
 	for (const result of status.values()) {
 		if (isActionableResult(result)) return result;
 	}
 
 	return undefined;
-}
-
-// The custom API verdict to render when Rotector has nothing usable (unreachable or still
-// pending). An actionable flag always wins so a partner detection is never downgraded to a
-// SAFE-looking icon just because another provider answered first.
-export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
-	combined: CombinedStatus<T> | null
-): CustomApiResult<T> | undefined {
-	if (!combined) return undefined;
-
-	let firstWithData: CustomApiResult<T> | undefined;
-
-	for (const [apiId, result] of combined.entries()) {
-		if (apiId === ROTECTOR_API_ID || !result.data) continue;
-		if (isActionableResult(result)) return result;
-		firstWithData ??= result;
-	}
-
-	return firstWithData;
 }
 
 // The most severe actionable flagType any custom API reported, or null when none flagged.
@@ -188,7 +156,9 @@ export function pickHighestSeverityCustomFlag<T extends UserStatus | GroupStatus
 	let worstRank = ACTIONABLE_FLAG_SEVERITY.length;
 
 	for (const [apiId, result] of combined.entries()) {
-		if (apiId === ROTECTOR_API_ID || !result.data) continue;
+		if (!result.data) continue;
+		// Skip system APIs - we only want custom/user-configured APIs here
+		if (apiId.startsWith('system-')) continue;
 		const rank = ACTIONABLE_FLAG_SEVERITY.indexOf(result.data.flagType);
 		if (rank === -1) continue;
 		if (rank < worstRank) {
@@ -198,4 +168,141 @@ export function pickHighestSeverityCustomFlag<T extends UserStatus | GroupStatus
 	}
 
 	return worst;
+}
+
+// The custom API verdict to render when system APIs have nothing usable (unreachable or still
+// pending). An actionable flag always wins so a partner detection is never downgraded to a
+// SAFE-looking icon just because another provider answered first.
+export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null
+): CustomApiResult<T> | undefined {
+	if (!combined) return undefined;
+
+	let firstWithData: CustomApiResult<T> | undefined;
+
+	for (const [apiId, result] of combined.entries()) {
+		if (apiId.startsWith('system-') || !result.data) continue;
+		if (isActionableResult(result)) return result;
+		firstWithData ??= result;
+	}
+
+	return firstWithData;
+}
+
+// The system providers, most trusted first. Only used to break ties between equally severe
+// verdicts, never to let a milder provider outrank a more severe one.
+const SYSTEM_API_ORDER = ['system-scsn', 'system-rab', 'system-tase'] as const;
+
+type SystemApiId = (typeof SYSTEM_API_ORDER)[number];
+
+// The system provider whose verdict should stand for the user as a whole, as [apiId, result].
+//
+// RoProtect runs three independent services (SIGMANET, RAB, TASE) and they regularly disagree:
+// a user can be clean on one and flagged on another. Taking whichever provider answered first
+// would let a clean SIGMANET verdict hide a TASE detection, so an actionable flag from any
+// provider wins outright and the most severe one wins among several. When nothing is
+// actionable the order above decides, which keeps non-flagged states such as QUEUED or
+// PROVISIONAL intact.
+export function pickHighestSeveritySystemResult<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null | undefined
+): [string, CustomApiResult<T>] | undefined {
+	if (!combined) return undefined;
+
+	let best: [string, CustomApiResult<T>] | undefined;
+	let bestRank = ACTIONABLE_FLAG_SEVERITY.length;
+
+	const consider = (id: string, result: CustomApiResult<T>) => {
+		if (!result.data) return;
+		const rank = ACTIONABLE_FLAG_SEVERITY.indexOf(result.data.flagType);
+		if (rank !== -1) {
+			if (rank < bestRank) {
+				bestRank = rank;
+				best = [id, result];
+			}
+			return;
+		}
+		best ??= [id, result];
+	};
+
+	for (const id of SYSTEM_API_ORDER) {
+		const result = combined.get(id);
+		if (result) consider(id, result);
+	}
+
+	// RoProtect can add services later, so consider any other system provider too rather than
+	// silently dropping a verdict from a service this build has never heard of
+	for (const [id, result] of combined.entries()) {
+		if (id.startsWith('system-') && !SYSTEM_API_ORDER.includes(id as SystemApiId)) {
+			consider(id, result);
+		}
+	}
+
+	return best;
+}
+
+export interface SystemApiSummary<T> {
+	data: T | undefined;
+	loading: boolean;
+	error: string | null;
+}
+
+const NO_SYSTEM_APIS: SystemApiSummary<never> = { data: undefined, loading: false, error: null };
+
+// Collapses the system providers into the single verdict/signal the call sites used to read off
+// a lone 'system-roprotect' entry. That id no longer exists now that RoProtect is queried as
+// three separate services, so reading it directly always missed every verdict and left callers
+// stuck on their "no data yet" state.
+//
+// Once any provider has answered, that verdict stands on its own: a slower sibling must not hold
+// the UI in its loading state, and a failing sibling must not overwrite a real verdict with an
+// error. Loading and error therefore only surface while no provider has produced data.
+export function getSystemApiSummary<T extends UserStatus | GroupStatus>(
+	combined: CombinedStatus<T> | null | undefined
+): SystemApiSummary<T> {
+	if (!combined) return NO_SYSTEM_APIS;
+
+	const data = pickHighestSeveritySystemResult(combined)?.[1].data;
+	if (data) return { data, loading: false, error: null };
+
+	let sawSystem = false;
+	let loading = false;
+	let error: string | null = null;
+
+	for (const [id, result] of combined.entries()) {
+		if (!id.startsWith('system-')) continue;
+		sawSystem = true;
+		if (result.loading) loading = true;
+		if (result.error && error === null) error = result.error;
+	}
+
+	return sawSystem ? { data: undefined, loading, error } : NO_SYSTEM_APIS;
+}
+
+const ACTIONABLE_FLAG_TYPES = new Set<number>([
+	STATUS.FLAGS.UNSAFE,
+	STATUS.FLAGS.PENDING,
+	STATUS.FLAGS.MIXED,
+	STATUS.FLAGS.REDACTED
+]);
+
+// Same actionable set ordered most severe first, so a user flagged by several custom APIs is
+// bucketed by its worst verdict rather than by whichever API happened to answer first
+const ACTIONABLE_FLAG_SEVERITY: readonly number[] = [
+	STATUS.FLAGS.UNSAFE,
+	STATUS.FLAGS.REDACTED,
+	STATUS.FLAGS.MIXED,
+	STATUS.FLAGS.PENDING
+];
+
+// Check if an individual API result has flagged the entity
+export function isActionableResult<T extends UserStatus | GroupStatus>(
+	result: CustomApiResult<T>
+): boolean {
+	return !!result.data && ACTIONABLE_FLAG_TYPES.has(result.data.flagType);
+}
+
+interface StatusBadges {
+	isReportable: boolean;
+	isOutfitOnly: boolean;
+	hasCrossSignal: boolean;
 }

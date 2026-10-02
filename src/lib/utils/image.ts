@@ -17,5 +17,12 @@ export async function fetchImageAsDataUrl(url: string): Promise<string> {
 		binary += String.fromCharCode(...chunk);
 	}
 
-	return `data:image/webp;base64,${btoa(binary)}`;
+	// Trust the response MIME so non-webp sources (Discord serves png/gif) keep
+	// their real type. Roblox's page CSP allows `img-src data:` but not
+	// cdn.discordapp.com, so images destined for the tooltip have to travel
+	// inline as data URLs rather than be fetched by the page.
+	const rawMime = response.headers.get('content-type')?.split(';', 1)[0]?.trim();
+	const mimeType = rawMime?.startsWith('image/') ? rawMime : 'image/webp';
+
+	return `data:${mimeType};base64,${btoa(binary)}`;
 }

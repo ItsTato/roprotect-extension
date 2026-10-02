@@ -14,6 +14,7 @@ import {
 	initializeRestrictedAccess,
 	setupRestrictedAccessListener
 } from '@/lib/stores/restricted-access';
+import { subscribeStorageKey } from '@/lib/utils/storage';
 import { injectBlurStyles, injectDefaultBlurStyles } from '@/lib/services/blur/service';
 import { computeAndCacheDeviceFingerprint } from '@/lib/utils/device-fingerprint';
 import { metricsCollector } from '@/lib/utils/logging/metrics-collector';
@@ -54,48 +55,10 @@ async function waitForBody(): Promise<HTMLElement> {
 
 export default defineContentScript({
 	matches: [
-		// Standard URLs
-		'https://*.roblox.com/users/*/profile*',
-		'https://*.roblox.com/users/*/profile/*',
-		'https://*.roblox.com/home*',
-		'https://*.roblox.com/home/*',
-		'https://*.roblox.com/users/*/friends*',
-		'https://*.roblox.com/users/*/friends/*',
-		'https://*.roblox.com/users/*/followers*',
-		'https://*.roblox.com/users/*/followers/*',
-		'https://*.roblox.com/users/*/following*',
-		'https://*.roblox.com/users/*/following/*',
-		'https://*.roblox.com/users/friends*',
-		'https://*.roblox.com/users/friends/*',
-		'https://*.roblox.com/groups*',
-		'https://*.roblox.com/groups/*',
-		'https://*.roblox.com/communities*',
-		'https://*.roblox.com/communities/*',
-		'https://*.roblox.com/search/users*',
-		'https://*.roblox.com/search/users/*',
-		'https://*.roblox.com/report-abuse*',
-		'https://*.roblox.com/report-abuse/*',
+		// All Roblox pages
+		'https://*.roblox.com/*',
 		// Internationalized URLs
-		'https://*.roblox.com/*/users/*/profile*',
-		'https://*.roblox.com/*/users/*/profile/*',
-		'https://*.roblox.com/*/home*',
-		'https://*.roblox.com/*/home/*',
-		'https://*.roblox.com/*/users/*/friends*',
-		'https://*.roblox.com/*/users/*/friends/*',
-		'https://*.roblox.com/*/users/*/followers*',
-		'https://*.roblox.com/*/users/*/followers/*',
-		'https://*.roblox.com/*/users/*/following*',
-		'https://*.roblox.com/*/users/*/following/*',
-		'https://*.roblox.com/*/users/friends*',
-		'https://*.roblox.com/*/users/friends/*',
-		'https://*.roblox.com/*/groups*',
-		'https://*.roblox.com/*/groups/*',
-		'https://*.roblox.com/*/communities*',
-		'https://*.roblox.com/*/communities/*',
-		'https://*.roblox.com/*/search/users*',
-		'https://*.roblox.com/*/search/users/*',
-		'https://*.roblox.com/*/report-abuse*',
-		'https://*.roblox.com/*/report-abuse/*'
+		'https://*.roblox.com/*/*'
 	],
 	runAt: 'document_start',
 
@@ -119,6 +82,15 @@ export default defineContentScript({
 			logger.debug('Loading custom APIs configuration...');
 			await loadCustomApis();
 			logger.debug('Custom APIs loaded successfully');
+
+			// Reload custom APIs when API key changes (so new system APIs from whoami are loaded)
+			subscribeStorageKey<string>('sync', 'apiKey', async (newKey) => {
+				if (newKey?.trim()) {
+					logger.debug('API key changed, reloading custom APIs...');
+					await loadCustomApis();
+					logger.debug('Custom APIs reloaded successfully');
+				}
+			});
 
 			logger.debug('Initializing access state...');
 			await initializeRestrictedAccess();

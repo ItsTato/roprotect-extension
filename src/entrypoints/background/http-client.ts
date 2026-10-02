@@ -8,11 +8,6 @@ import { getStorage } from '@/lib/utils/storage';
 import { getInstallationId } from '@/lib/utils/installation-id';
 import { getCachedDeviceFingerprint } from '@/lib/utils/device-fingerprint';
 import { markSessionRestricted } from '@/lib/stores/session-state';
-import {
-	bumpStoredAuthExpires,
-	clearStoredAuthToken,
-	getStoredAuthToken
-} from '@/lib/utils/roblox-auth-storage';
 
 type BearerOverride =
 	| { kind: 'membership' } // use X-Auth-Token (membership key) as Authorization
@@ -63,7 +58,8 @@ interface HttpRequestOptions<T = unknown> extends RequestInit {
 	// unwrap path is skipped entirely. Used for non-JSON responses (file
 	// downloads). Implies maxRetries=1 because partial downloads aren't retryable.
 	parseResponse?: ((response: Response) => Promise<T>) | undefined;
-	// Auth bearer policy. Default uses the stored session token if present.
+	// Auth bearer policy. Default also uses the membership key, which the API
+	// accepts interchangeably with X-Auth-Token.
 	bearerOverride?: BearerOverride | undefined;
 }
 
@@ -74,13 +70,9 @@ interface RotectorHeaderOptions {
 	bearerOverride: BearerOverride | undefined;
 }
 
-async function resolveBearer(
-	override: BearerOverride | undefined,
-	apiKey: string | null
-): Promise<string | null> {
+function resolveBearer(override: BearerOverride | undefined, apiKey: string | null): string | null {
 	if (override?.kind === 'none') return null;
-	if (override?.kind === 'membership') return apiKey;
-	return getStoredAuthToken();
+	return apiKey;
 }
 
 async function buildRotectorHeaders(
@@ -93,7 +85,7 @@ async function buildRotectorHeaders(
 		headers.set('X-Auth-Token', apiKey);
 	}
 
-	const bearer = await resolveBearer(bearerOverride, apiKey);
+	const bearer = resolveBearer(bearerOverride, apiKey);
 	if (bearer) {
 		headers.set('Authorization', `Bearer ${bearer}`);
 	}
@@ -131,14 +123,6 @@ function normalizeFetchError(error: unknown, timeout: number): ApiError {
 	}
 
 	return asApiError(error);
-}
-
-async function processRotectorResponseHeaders(headers: Headers): Promise<void> {
-	const expires = headers.get('X-Token-Expires');
-	if (!expires) return;
-	const parsed = Number(expires);
-	if (!Number.isFinite(parsed) || parsed <= 0) return;
-	await bumpStoredAuthExpires(parsed);
 }
 
 async function prepareHeaders(
@@ -224,28 +208,6 @@ async function handleRotectorForbidden(error: ApiError, endpoint: string): Promi
 	}
 }
 
-// Endpoints whose 401 specifically means the session token is invalid or
-// revoked. Other endpoints attach the bearer opportunistically (queue,
-// leaderboard) or authenticate via the membership key, so a 401 there must
-// not nuke the session.
-function isSessionAuthEndpoint(endpoint: string): boolean {
-	return (
-		endpoint.startsWith('/v1/me/') ||
-		endpoint === '/v1/auth/roblox/logout' ||
-		endpoint === '/v1/auth/roblox/logout-all'
-	);
-}
-
-async function handleSessionUnauthorized(
-	error: ApiError,
-	sentBearer: boolean,
-	endpoint: string
-): Promise<void> {
-	if (!sentBearer || error.status !== 401) return;
-	if (!isSessionAuthEndpoint(endpoint)) return;
-	await clearStoredAuthToken();
-}
-
 // Owns retries, Retry-After honoring, safe-method gating, envelope unwrapping, and Rotector restricted-access detection
 export async function makeHttpRequest<T = unknown>(
 	endpoint: string,
@@ -272,22 +234,43 @@ export async function makeHttpRequest<T = unknown>(
 	const isCustomApi = !!customApi;
 	const url = isCustomApi ? endpoint : `${API_CONFIG.BASE_URL}${endpoint}`;
 
+	logger.debug('[http-client] makeHttpRequest started', {
+		endpoint,
+		isCustomApi,
+		url,
+		method: (fetchOptions.method ?? 'GET').toUpperCase(),
+		timeout,
+		maxRetries: effectiveMaxRetries,
+		rawResponse,
+		hasParse: !!parse,
+		hasParseResponse: !!parseResponse,
+		baseUrl: API_CONFIG.BASE_URL
+	});
+
 	const headers = await prepareHeaders(fetchOptions.headers, customApi, {
 		clientId,
 		lookupContext,
 		readPrimary,
 		bearerOverride
 	});
-	const sentBearer = !isCustomApi && headers.has('Authorization');
 
 	const method = (fetchOptions.method ?? 'GET').toUpperCase();
 	const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+	logger.debug('[http-client] Request headers prepared', {
+		url,
+		method,
+		hasAuth: headers.has('Authorization'),
+		hasXAuthToken: headers.has('X-Auth-Token'),
+		headerKeys: [...headers.keys()]
+	});
 
 	let lastError: Error | null = null;
 
 	for (let attempt = 1; attempt <= effectiveMaxRetries; attempt++) {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => {
+			logger.debug('[http-client] Request timeout triggered', { attempt, timeout });
 			controller.abort();
 		}, timeout);
 		const requestOptions: RequestInit = {
@@ -297,59 +280,91 @@ export async function makeHttpRequest<T = unknown>(
 		};
 
 		try {
-			logger.debug(`HTTP Request attempt ${String(attempt)}: ${method} ${url}`);
+			logger.debug('[http-client] Fetch attempt starting', { attempt, url, method });
 
+			const fetchStartTime = Date.now();
 			const response = await fetch(url, requestOptions);
-			const duration = Date.now() - startTime;
+			const fetchDuration = Date.now() - fetchStartTime;
+			const totalDuration = Date.now() - startTime;
+
+			logger.debug('[http-client] Fetch completed', {
+				attempt,
+				url,
+				status: response.status,
+				statusText: response.statusText,
+				ok: response.ok,
+				fetchDuration,
+				totalDuration,
+				responseHeaders: [...response.headers.keys()]
+			});
 
 			if (!response.ok) {
+				logger.warn('[http-client] Response not ok, building error', {
+					attempt,
+					status: response.status,
+					statusText: response.statusText
+				});
 				throw await buildHttpError(response);
 			}
 
-			if (!isCustomApi) {
-				await processRotectorResponseHeaders(response.headers);
-			}
-
 			if (parseResponse) {
+				logger.debug('[http-client] Using parseResponse handler');
 				const result = await parseResponse(response);
-				logger.apiCall(method, url, response.status, duration);
+				logger.apiCall(method, url, response.status, totalDuration);
 				return result;
 			}
 
 			if (response.status === 204) {
-				logger.apiCall(method, url, response.status, duration);
+				logger.apiCall(method, url, response.status, totalDuration);
 				return null as T;
 			}
 
+			logger.debug('[http-client] Parsing JSON response');
+			const jsonStartTime = Date.now();
 			const data: unknown = await response.json();
-			logger.apiCall(method, url, response.status, duration);
+			const jsonDuration = Date.now() - jsonStartTime;
+			logger.debug('[http-client] JSON parsed', {
+				jsonDuration,
+				dataType: typeof data,
+				isNull: data === null,
+				keys: data && typeof data === 'object' ? Object.keys(data) : null
+			});
+
+			logger.apiCall(method, url, response.status, totalDuration);
 
 			await maybeWaitForRateLimit(response.headers);
 
+			logger.debug('[http-client] Finalizing payload');
 			return finalizePayload(data, rawResponse, parse);
 		} catch (error) {
 			lastError = normalizeFetchError(error, timeout);
-			const duration = Date.now() - startTime;
+			const lastErrorRecord = lastError as Record<string, unknown> | Error;
+			const errorDuration = Date.now() - startTime;
 
-			logger.warn(
-				`HTTP request failed (attempt ${String(attempt)}/${String(effectiveMaxRetries)})`,
-				{
-					url,
-					error: lastError.message,
-					duration
-				}
-			);
+			logger.error('[http-client] Request error caught', {
+				attempt,
+				url,
+				errorName: error instanceof Error ? error.name : 'Unknown',
+				errorMessage: error instanceof Error ? error.message : String(error),
+				errorStack: error instanceof Error ? error.stack : undefined,
+				normalizedError: {
+					message: lastError.message,
+					status: lastErrorRecord instanceof Error ? undefined : lastErrorRecord['status'],
+					code: lastErrorRecord instanceof Error ? undefined : lastErrorRecord['code'],
+					type: lastErrorRecord instanceof Error ? undefined : lastErrorRecord['type']
+				},
+				duration: errorDuration
+			});
 
 			const delay = decideRetry(lastError, attempt, effectiveMaxRetries, retryDelay, isSafeMethod);
 			if (delay !== null) {
-				logger.debug(`Retrying in ${String(delay)}ms...`);
+				logger.debug('[http-client] Retrying', { attempt, delay });
 				await new Promise((resolve) => setTimeout(resolve, delay));
 				continue;
 			}
 
 			if (!isCustomApi) {
 				await handleRotectorForbidden(lastError, endpoint);
-				await handleSessionUnauthorized(lastError, sentBearer, endpoint);
 			}
 
 			break;
@@ -357,6 +372,15 @@ export async function makeHttpRequest<T = unknown>(
 			clearTimeout(timeoutId);
 		}
 	}
+
+	logger.error('[http-client] All retries exhausted, throwing final error', {
+		url,
+		lastError: lastError?.message,
+		lastErrorStatus:
+			lastError && !('message' in lastError)
+				? (lastError as Record<string, unknown>)['status']
+				: undefined
+	});
 
 	throw lastError ?? new Error('API error. Please try again later.');
 }

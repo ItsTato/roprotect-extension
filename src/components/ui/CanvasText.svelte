@@ -156,6 +156,12 @@
 			cssWidth = measure.measureText(resolvedText).width;
 		}
 
+		// measureText returns the advance width, which excludes the right side
+		// bearing and any ink overhang past the last glyph's origin. Sizing the
+		// canvas to exactly that clips the final glyph by a pixel or two wherever
+		// the parent truncates. One pixel of slack absorbs the difference.
+		cssWidth = Math.ceil(cssWidth) + 1;
+
 		const lineHeightPx = inherited.fontSize * inherited.lineHeight;
 		const cssHeight = lineHeightPx * lines.length;
 		el.width = Math.max(1, Math.floor(cssWidth * dpr));

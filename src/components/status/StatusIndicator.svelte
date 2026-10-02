@@ -9,7 +9,6 @@
 	import CanvasText from '@/components/ui/CanvasText.svelte';
 	import { groupStatusService, userStatusService } from '@/lib/services/rotector/entity-status';
 	import { countCustomApiFlags } from '@/lib/services/rotector/unified-query';
-	import { ROTECTOR_API_ID } from '@/lib/stores/custom-apis';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
 	import { openOutfitViewer } from '@/lib/stores/outfit-viewer';
@@ -19,7 +18,7 @@
 		getRotectorMembershipBadge,
 		getRotectorOutfitEvidence
 	} from '@/lib/utils/status/status-projection';
-	import { pickCustomApiFallback } from '@/lib/utils/status/status-utils';
+	import { getSystemApiSummary, pickCustomApiFallback } from '@/lib/utils/status/status-utils';
 	import { Flag, Hourglass } from '@lucide/svelte';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 
@@ -84,15 +83,19 @@
 		return clientId !== null && targetId !== null && clientId === targetId;
 	});
 
+	// RoProtect is three separate services, so resolve them as a group and let the most severe
+	// verdict stand. Reading the old single 'system-roprotect' entry always missed every provider,
+	// which left this indicator on "Checking..." forever.
+	const systemSummary = $derived(getSystemApiSummary(entityStatus));
+
 	const statusConfig = $derived.by(() => {
 		if (!entityStatus) {
 			return getStatusConfig(cachedStatus, cachedStatus, !cachedStatus, null, entityType);
 		}
 
-		const rotector = entityStatus.get(ROTECTOR_API_ID);
-		const rotectorStatus = rotector?.data ?? cachedStatus;
-		const rotectorLoading = rotector?.loading ?? false;
-		const rotectorError = rotector?.error ?? null;
+		const rotectorStatus = systemSummary.data ?? cachedStatus;
+		const rotectorLoading = systemSummary.loading;
+		const rotectorError = systemSummary.error;
 		const effectiveError = rotectorError || error;
 
 		// An unreachable or not-yet-answered Rotector makes getStatusConfig render the generic
@@ -142,9 +145,7 @@
 		})
 	);
 
-	const rotector = $derived(entityStatus?.get(ROTECTOR_API_ID));
-	const rotectorLoading = $derived(rotector?.loading ?? false);
-	const hasData = $derived(!!(rotector?.data ?? cachedStatus));
+	const hasData = $derived(!!(systemSummary.data ?? cachedStatus));
 	const anyApiHasData = $derived(
 		!!entityStatus && [...entityStatus.values()].some((result) => !!result.data)
 	);
@@ -156,7 +157,7 @@
 	const tooltipBlocked = $derived(
 		!anyApiHasData &&
 			!anyApiErrored &&
-			(rotectorLoading || (!hasData && !error && !isRestricted && !isSelfLookup))
+			(systemSummary.loading || (!hasData && !error && !isRestricted && !isSelfLookup))
 	);
 
 	function handleClick(event: MouseEvent | KeyboardEvent) {
@@ -229,7 +230,7 @@
 	}
 
 	function handleQueue(isReprocess = false) {
-		onQueue?.(sanitizedEntityId, isReprocess, rotector?.data ?? cachedStatus);
+		onQueue?.(sanitizedEntityId, isReprocess, systemSummary.data ?? cachedStatus);
 	}
 
 	function handleExpandedQueue(isReprocess = false, tooltipStatus: EntityStatus | null = null) {
@@ -249,7 +250,7 @@
 	$effect(() => {
 		if (!sanitizedEntityId) return;
 		if (isRestricted && !isSelfLookup) return;
-		if (rotector?.data || rotectorLoading || error || skipAutoFetch) return;
+		if (systemSummary.data || systemSummary.loading || error || skipAutoFetch) return;
 
 		void statusService.getOrFetch(sanitizedEntityId).then((result) => {
 			if (result) cachedStatus = result;
@@ -261,7 +262,7 @@
 			entityType,
 			userId: sanitizedEntityId,
 			isSelfLookup,
-			flagType: (rotector?.data ?? cachedStatus)?.flagType
+			flagType: (systemSummary.data ?? cachedStatus)?.flagType
 		});
 	});
 
@@ -297,7 +298,7 @@
 				: statusConfig.textContent
 		}
 	})}
-	data-status-flag={rotector?.data?.flagType}
+	data-status-flag={systemSummary.data?.flagType}
 	data-user-id={sanitizedEntityId}
 	onclick={handleClick}
 	onkeydown={handleKeydown}

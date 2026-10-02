@@ -27,59 +27,68 @@ export const ENTITY_TYPES = {
 	GROUP: 'group'
 } as const;
 
-export const KOFI_URL = 'https://ko-fi.com/rotector';
-
 export const RAYWARD_URL = 'https://rayward.app';
 
-export const RAYWARD_ANNOUNCEMENT_URL = 'https://rotector.com/blog/extension-is-becoming-rayward';
+// Custom API bundles are exported as `.roprotect-api`. The pre-rebrand
+// `.rotector-api` extension is still accepted on import so files shared before
+// the rename keep working.
+export const CUSTOM_API_FILE_EXTENSION = '.roprotect-api';
+export const CUSTOM_API_LEGACY_FILE_EXTENSIONS: readonly string[] = ['.rotector-api'];
+export const CUSTOM_API_IMPORT_EXTENSIONS: string = [
+	CUSTOM_API_FILE_EXTENSION,
+	...CUSTOM_API_LEGACY_FILE_EXTENSIONS
+].join(',');
+
+export const RAYWARD_ANNOUNCEMENT_URL =
+	'https://roprotect.tlet.xyz/blog/extension-is-becoming-rayward';
 
 export const CHROME_STORE_REVIEW_URL =
-	'https://chromewebstore.google.com/detail/rotector-roblox-safety-wa/ilegibonffbmecfchpcmcmknocboagan/reviews';
+	'https://chromewebstore.google.com/detail/roprotect/roprotect/reviews';
 export const FIREFOX_STORE_REVIEW_URL =
-	'https://addons.mozilla.org/en-US/firefox/addon/rotector/reviews/';
+	'https://addons.mozilla.org/en-US/firefox/addon/roprotect/reviews/';
 
 const API_DOMAIN =
-	import.meta.env.USE_DEV_API === 'true' ? 'roscoe-dev.rotector.com' : 'roscoe.rotector.com';
+	import.meta.env.USE_DEV_API === 'true' ? 'roprotect-dev.tlet.xyz' : 'roprotect.tlet.xyz';
 
 export const API_CONFIG = {
 	BASE_URL: `https://${API_DOMAIN}`,
 	ENDPOINTS: {
 		USER_CHECK: '/v1/lookup/roblox/user',
-		GROUP_CHECK: '/v1/lookup/roblox/group',
+		// Group verdicts are served by SCSN rather than the first-party backend.
+		// Matches the doubled-version shape of the per-provider user routes
+		// (/v1/scsn/v1/lookup/user/{userId}). See SCSN-GROUP-API.md.
+		GROUP_CHECK: '/v1/scsn/v1/lookup/roblox/group',
+		// Tracked users are a first-party sub-route of the group lookup, kept
+		// separate because SCSN does not serve /tracked-users yet. Deriving it
+		// from GROUP_CHECK would silently repoint it when the provider changes.
+		GROUP_TRACKED_USERS: '/v1/lookup/roblox/group',
 		QUEUE_USER: '/v1/queue/roblox/user',
 		QUEUE_LIMITS: '/v1/queue/limits',
-		SUBMIT_VOTE: '/v1/votes/roblox/user',
-		GET_VOTES: '/v1/votes/roblox/user',
-		GET_STATS: '/v2/stats',
 		QUEUE_STATUS: '/v1/queue/roblox/user/status',
+		USAGE: '/v1/usage',
 		EXPORT_GROUP_TRACKED_USERS: '/v1/export/roblox/group',
 		LOOKUP_OUTFITS_BY_NAME: '/v1/lookup/outfits/by-name',
 		LOOKUP_OUTFITS_BY_ID: '/v1/lookup/outfits/by-id',
 		EXTENSION_MEMBERSHIP_STATUS: '/v1/extension/membership/status',
 		EXTENSION_MEMBERSHIP_BADGE: '/v1/extension/membership/badge',
 		EXTENSION_MEMBERSHIP_VERIFICATION: '/v1/extension/membership/verification',
-		AUTH_ROBLOX_CHALLENGE: '/v1/auth/roblox/challenge',
-		AUTH_ROBLOX_VERIFY: '/v1/auth/roblox/verify',
-		AUTH_ROBLOX_EXCHANGE: '/v1/auth/roblox/exchange',
-		AUTH_ROBLOX_LOGOUT: '/v1/auth/roblox/logout',
-		AUTH_ROBLOX_LOGOUT_ALL: '/v1/auth/roblox/logout-all',
-		ME_PROFILE: '/v1/me/profile',
-		ME_SETTINGS: '/v1/me/settings',
-		ME_REFRESH: '/v1/me/refresh',
-		ME_SESSIONS: '/v1/me/sessions',
-		LEADERBOARD: '/v1/leaderboard'
+		// TASE V2 endpoints
+		TASE_V2_USER_CHECK: '/v1/tase/v2/lookup/user',
+		TASE_V2_BATCH_CHECK: '/v1/tase/v2/lookup/users',
+		// Discord avatar endpoint
+		DISCORD_AVATAR_BATCH: '/v1/discord/v1/get_user_avatar_link'
 	},
 	BATCH_SIZE: 100,
-	BATCH_DELAY: 250, // ms between batches
+	BATCH_DELAY: 250,
 	MAX_RETRIES: 3,
-	RETRY_DELAY: 1000, // base delay in ms
-	TIMEOUT: 10_000, // 10 seconds
-	EXPORT_TIMEOUT: 30_000, // 30 seconds for large export downloads
-	QUEUE_POLL_INTERVAL: 30_000, // background queue-status poll cadence
-	PROGRESSIVE_API_TIMEOUT: 15_000, // per-API timeout when racing custom + system APIs
-	OUTFIT_SNAPSHOT_MAX_ITEMS: 50, // upper bound on outfit-name lookups per snapshot
-	TRANSLATION_CACHE_MAX: 100, // in-memory translation cache size
-	TRANSLATION_CACHE_TTL: 60 * 60 * 1000 // 1 hour
+	RETRY_DELAY: 1000,
+	TIMEOUT: 10_000,
+	EXPORT_TIMEOUT: 30_000,
+	QUEUE_POLL_INTERVAL: 30_000,
+	PROGRESSIVE_API_TIMEOUT: 15_000,
+	OUTFIT_SNAPSHOT_MAX_ITEMS: 50,
+	TRANSLATION_CACHE_MAX: 100,
+	TRANSLATION_CACHE_TTL: 60 * 60 * 1000
 } as const;
 
 // API Actions for message passing
@@ -90,9 +99,7 @@ export const API_ACTIONS = {
 	CHECK_MULTIPLE_GROUPS: 'checkMultipleGroups',
 	QUEUE_USER: 'queueUser',
 	GET_QUEUE_LIMITS: 'getQueueLimits',
-	SUBMIT_VOTE: 'submitVote',
-	GET_VOTES: 'getVotes',
-	GET_STATS: 'getStats',
+	GET_USAGE: 'getUsage',
 	TRANSLATE_TEXT: 'translateText',
 	GET_GROUP_TRACKED_USERS: 'getGroupTrackedUsers',
 	LOOKUP_ROBLOX_USER_DISCORD: 'lookupRobloxUserDiscord',
@@ -107,17 +114,8 @@ export const API_ACTIONS = {
 	EXTENSION_CONFIRM_MEMBERSHIP_VERIFICATION: 'extensionConfirmMembershipVerification',
 	HAS_TRANSLATE_PERMISSION: 'hasTranslatePermission',
 	REQUEST_TRANSLATE_PERMISSION: 'requestTranslatePermission',
-	ROBLOX_AUTH_CHALLENGE: 'robloxAuthChallenge',
-	ROBLOX_AUTH_VERIFY: 'robloxAuthVerify',
-	ROBLOX_AUTH_EXCHANGE: 'robloxAuthExchange',
-	ROBLOX_AUTH_LOGOUT: 'robloxAuthLogout',
-	ROBLOX_AUTH_LOGOUT_ALL: 'robloxAuthLogoutAll',
-	ME_GET_PROFILE: 'meGetProfile',
-	ME_UPDATE_SETTINGS: 'meUpdateSettings',
-	ME_REFRESH_IDENTITY: 'meRefreshIdentity',
-	ME_LIST_SESSIONS: 'meListSessions',
-	ME_REVOKE_SESSION: 'meRevokeSession',
-	GET_LEADERBOARD: 'getLeaderboard'
+	API_WHOAMI: 'apiWhoami',
+	GET_DISCORD_AVATARS: 'getDiscordAvatars'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {
@@ -144,13 +142,6 @@ export const REASON_KEYS = {
 	USER_PROFILE: 'User Profile',
 	AVATAR_OUTFIT: 'Avatar Outfit'
 } as const;
-
-export const VOTE_TYPES = {
-	UPVOTE: 1,
-	DOWNVOTE: -1
-} as const;
-
-export type VoteType = (typeof VOTE_TYPES)[keyof typeof VOTE_TYPES];
 
 export const OBSERVER_CONFIG = {
 	DEFAULT_HEALTH_CHECK_INTERVAL: 3000,
@@ -200,11 +191,9 @@ export const USER_ACTIONS = {
 	QUEUE_REQUESTED: 'queue_requested',
 	QUEUE_CONFIRMED: 'queue_confirmed',
 	QUEUE_CANCELLED: 'queue_cancelled',
-	VOTE_SUBMITTED: 'vote_submitted',
 	FRIEND_PROCEED: 'friend_proceed',
 	FRIEND_CANCEL: 'friend_cancel',
 	FRIEND_BLOCK: 'friend_block',
-	VOTE_WIDGET_CLICK: 'voting_widget_click',
 	FRIEND_WARNING_PROCEED: 'friend_warning_proceed',
 	FRIEND_WARNING_CANCEL: 'friend_warning_cancel',
 	QUEUE_POPUP_CONFIRM: 'queue_popup_confirm',
@@ -220,13 +209,6 @@ export const LOOKUP_CONTEXT = {
 	FRIENDS: 'friends',
 	GROUPS: 'groups',
 	PROFILE: 'profile'
-} as const;
-
-export const REQUIRED_LEGAL_VERSION = '2.17.1';
-
-export const LEGAL_URLS = {
-	terms: 'https://rotector.com/terms',
-	privacy: 'https://rotector.com/privacy'
 } as const;
 
 // Roblox API base URLs

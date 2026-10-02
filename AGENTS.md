@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Rotector — MV3 browser extension (Chrome/Edge/Firefox) that warns about flagged Roblox users.
+RoProtect — MV3 browser extension (Chrome/Edge/Firefox) that warns about flagged Roblox users.
 WXT + Svelte 5 (runes) + TypeScript + Tailwind 4. **Bun only** (`bun.lock`, `bun run ...`, lefthook shells out to `bun`/`bunx`).
 
 ## Commands
@@ -27,13 +27,10 @@ bun run quality      # pre-commit gate: check && knip && validate:i18n && stylel
 
 `.github/workflows/release.yml` is `workflow_dispatch` only. It reads the version from `package.json`, builds all three targets, and pushes tag `v<package.json version>` with a **draft** GitHub release (a human publishes it). There is no publish automation to the stores.
 
-## Version lives in three places — keep them in sync
+## Version lives in two places — keep them in sync
 
 1. `package.json` → `version`
 2. `wxt.config.ts` → `manifest().version` (hardcoded string, not read from package.json)
-3. `src/lib/types/constants.ts` → `REQUIRED_LEGAL_VERSION`
-
-**Bumping `REQUIRED_LEGAL_VERSION` forces every existing user to re-accept the Terms/Privacy modal.** Until they do, `extensionFeaturesEnabled` is false and the content script never initializes its page controllers (`src/entrypoints/content.ts`). Only bump it for actual legal-text changes.
 
 User-facing changes also belong in `src/lib/data/changelog-entries.ts`: newest entry first, `CHANGELOGS[0]` is "latest", `silent: true` suppresses the auto-modal. A new version is not "released" to users until an entry exists.
 

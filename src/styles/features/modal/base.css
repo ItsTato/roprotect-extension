@@ -60,6 +60,12 @@
 	max-height: min(85vh, 800px);
 }
 
+@utility modal-popup-narrow {
+	@apply modal-popup;
+	width: 380px;
+	max-height: min(85vh, 560px);
+}
+
 /* =================================
    MODAL HEADER
    ================================= */

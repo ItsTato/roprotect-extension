@@ -2,6 +2,46 @@ import type { Changelog } from '@/lib/types/changelog';
 
 export const CHANGELOGS: Changelog[] = [
 	{
+		id: 'v2.20.0',
+		version: '2.20.0',
+		date: '2026-09-28',
+		title: 'RoProtect, rebuilt on a leaner core',
+		summary:
+			'Rotector is now RoProtect. Statistics are rebuilt on the new usage endpoint, the queue and leaderboard are gone, and the extension is lighter overall. Custom API bundles use the new .roprotect-api extension, with the old .rotector-api name still accepted on import.',
+		changes: [
+			{
+				type: 'changed',
+				description: 'Renamed from Rotector to RoProtect across the interface and branding'
+			},
+			{
+				type: 'changed',
+				description:
+					'Rebuilt statistics on the /v1/usage endpoint for faster, more accurate reporting'
+			},
+			{
+				type: 'removed',
+				description: 'Removed the queue view and the submitters leaderboard'
+			},
+			{
+				type: 'removed',
+				description: 'Removed the Roblox Account feature'
+			},
+			{
+				type: 'removed',
+				description: 'Removed the outdated notice modal'
+			},
+			{
+				type: 'changed',
+				description:
+					'Custom API exports now use the .roprotect-api extension; existing .rotector-api imports keep working'
+			},
+			{
+				type: 'fixed',
+				description: 'Usage no longer shows missing counters before a service has reported any'
+			}
+		]
+	},
+	{
 		id: 'v2.17.0',
 		version: '2.17.0',
 		date: '2026-05-20',
@@ -96,7 +136,8 @@ export const CHANGELOGS: Changelog[] = [
 			},
 			{
 				type: 'changed',
-				description: 'Ko-fi URL - Membership and funding links now point to ko-fi.com/rotector'
+				description:
+					'Funding links removed - Ko-fi and funding section removed; Discord link updated'
 			},
 			{
 				type: 'changed',

@@ -8,7 +8,6 @@
 	import PresetCard from '@/components/ui/PresetCard.svelte';
 	import SignalSection from './SignalSection.svelte';
 	import { loadMembershipStatus, membershipStore } from '@/lib/stores/membership';
-	import { robloxAuthStore } from '@/lib/stores/roblox-auth';
 	import { customApis, loadCustomApis, setCustomApiEnabled } from '@/lib/stores/custom-apis';
 	import { getAvailableLocales, setLanguage } from '@/lib/stores/i18n';
 	import {
@@ -31,16 +30,10 @@
 	interface Props {
 		onNavigateToCustomApis: () => void;
 		onNavigateToMembership: () => void;
-		onNavigateToRobloxAccount: () => void;
 		onNavigateToPerformance?: (() => void) | undefined;
 	}
 
-	let {
-		onNavigateToCustomApis,
-		onNavigateToMembership,
-		onNavigateToRobloxAccount,
-		onNavigateToPerformance
-	}: Props = $props();
+	let { onNavigateToCustomApis, onNavigateToMembership, onNavigateToPerformance }: Props = $props();
 
 	let developerExpanded = $state(false);
 	let togglingApiId = $state<string | null>(null);
@@ -164,19 +157,6 @@
 				return '';
 			}
 		}
-	});
-
-	const robloxAuth = $derived($robloxAuthStore);
-	const robloxAuthLabel = $derived.by(() => {
-		if (robloxAuth.kind !== 'signed-in') return $_('roblox_account_settings_status_signed_out');
-		const name =
-			robloxAuth.profile?.alias ??
-			robloxAuth.profile?.username ??
-			robloxAuth.cachedProfile?.username ??
-			'';
-		return name
-			? $_('roblox_account_settings_status_signed_in', { values: { name } })
-			: $_('roblox_account_settings_status_signed_in_unknown');
 	});
 </script>
 
@@ -352,17 +332,6 @@
 		<button class="settings-nav-button" onclick={onNavigateToMembership} type="button">
 			<span class="settings-nav-button-text">
 				{$_('membership_settings_manage_button')}
-			</span>
-			<ChevronRight size={14} />
-		</button>
-	</SignalSection>
-
-	<div class="popup-divider"></div>
-
-	<SignalSection status={robloxAuthLabel} title={$_('roblox_account_settings_section_title')}>
-		<button class="settings-nav-button" onclick={onNavigateToRobloxAccount} type="button">
-			<span class="settings-nav-button-text">
-				{$_('roblox_account_settings_manage_button')}
 			</span>
 			<ChevronRight size={14} />
 		</button>

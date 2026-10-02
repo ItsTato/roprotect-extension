@@ -2,7 +2,7 @@ import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
 
 const isDev = process.env['NODE_ENV'] === 'development' || process.argv.includes('dev');
-const apiDomain = isDev ? 'roscoe-dev.rotector.com' : 'roscoe.rotector.com';
+const apiDomain = isDev ? 'roprotect-dev.tlet.xyz' : 'roprotect.tlet.xyz';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -66,10 +66,16 @@ export default defineConfig({
 			name: '__MSG_extensionName__',
 			description: '__MSG_extensionDescription__',
 			default_locale: 'en',
-			version: '2.17.1',
+			version: '2.20.0',
 			minimum_chrome_version: '128',
 			permissions: ['storage', 'notifications', ...robloxFetch],
-			host_permissions: [`https://${apiDomain}/*`, 'https://cdn.rotector.com/*'],
+			host_permissions: [
+				`https://${apiDomain}/*`,
+				'https://cdn.rotector.com/*',
+				// Needed so the background can inline Discord avatars as data URLs:
+				// roblox.com's page CSP blocks cdn.discordapp.com in img-src.
+				'https://cdn.discordapp.com/*'
+			],
 			...(manifestVersion === 2
 				? { optional_permissions: optionalHosts }
 				: { optional_host_permissions: optionalHosts }),
@@ -93,10 +99,17 @@ export default defineConfig({
 			...(browser === 'firefox' && {
 				browser_specific_settings: {
 					gecko: {
-						id: 'rotector@jaxron.me',
+						id: 'roprotect@tlet.xyz',
 						strict_min_version: '129.0',
 						// See src/lib/utils/device-fingerprint.ts for what this declares and why
 						data_collection_permissions: {
+							// AMO requires both keys and rejects an empty `required`. "none" is the
+							// documented way to say nothing is collected without consent; it may
+							// not be combined with other required categories, but it can sit
+							// alongside `optional`. The device signal is only computed once the
+							// legal gate is accepted (see initializePageHandling in
+							// entrypoints/content.ts), so technicalAndInteraction stays optional.
+							required: ['none'],
 							optional: ['technicalAndInteraction']
 						}
 					}

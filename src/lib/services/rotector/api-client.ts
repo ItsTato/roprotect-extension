@@ -1,16 +1,9 @@
-import { API_ACTIONS, type VoteType } from '../../types/constants';
+import { API_ACTIONS } from '../../types/constants';
 import type {
 	ApiResponse,
 	ExportResult,
 	GroupStatus,
 	GroupTrackedUsersResponse,
-	Leaderboard,
-	LeaderboardWindow,
-	MeProfile,
-	MeRefreshResult,
-	MeSession,
-	MeSettingsPatch,
-	MeSettingsResponse,
 	MembershipBadgeUpdatePayload,
 	MembershipStatus,
 	MembershipVerificationChallenge,
@@ -19,21 +12,17 @@ import type {
 	QueueLimitsData,
 	QueueResult,
 	RequestOptions,
-	RobloxAuthChallenge,
-	RobloxAuthLogoutAll,
-	RobloxAuthSessionToken,
 	RobloxUserDiscordLookup,
 	TranslationResult,
-	UserStatus,
-	VoteData,
-	VoteResult
+	UserStatus
 } from '../../types/api';
-import type { ActivityHours, StatsResponse } from '../../types/stats';
+import type { ApiUsage } from '../../types/usage';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { getAbortError } from '../../utils/abort';
 import { buildResponseError } from '../../utils/api/api-error';
 import { getLoggedInUserId } from '../../utils/client-id';
 import { get } from 'svelte/store';
+import { logger } from '../../utils/logging/logger';
 
 // The background HTTP layer owns retries + Retry-After + safe-method gating
 // Stacking retries here on top of that produced MAX_RETRIES² fetches per failure
@@ -144,16 +133,8 @@ class RotectorApiClient {
 		return sendMessage<QueueLimitsData>(API_ACTIONS.GET_QUEUE_LIMITS, {});
 	}
 
-	async getStats(hours: ActivityHours): Promise<StatsResponse> {
-		return sendMessage<StatsResponse>(API_ACTIONS.GET_STATS, { hours });
-	}
-
-	async submitVote(userId: string | number, voteType: VoteType): Promise<VoteResult> {
-		return sendMessage<VoteResult>(API_ACTIONS.SUBMIT_VOTE, { userId, voteType });
-	}
-
-	async getVotes(userId: string | number): Promise<VoteData> {
-		return sendMessage<VoteData>(API_ACTIONS.GET_VOTES, { userId });
+	async getUsage(): Promise<ApiUsage> {
+		return sendMessage<ApiUsage>(API_ACTIONS.GET_USAGE, {});
 	}
 
 	async getMembershipStatus(): Promise<MembershipStatus> {
@@ -244,65 +225,22 @@ class RotectorApiClient {
 		});
 	}
 
-	async requestRobloxAuthChallenge(robloxUserId: number): Promise<RobloxAuthChallenge> {
-		return sendMessage<RobloxAuthChallenge>(API_ACTIONS.ROBLOX_AUTH_CHALLENGE, {
-			robloxUserId
+	async whoami(apiKey: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
+		logger.debug('[apiClient] whoami called', {
+			apiKeyPrefix: `${apiKey.slice(0, 8)}...`,
+			apiKeyLength: apiKey.length
 		});
-	}
-
-	async verifyRobloxAuth(challengeId: string): Promise<RobloxAuthSessionToken> {
-		return sendMessage<RobloxAuthSessionToken>(API_ACTIONS.ROBLOX_AUTH_VERIFY, { challengeId });
-	}
-
-	async exchangeMembershipForSession(): Promise<RobloxAuthSessionToken> {
-		return sendMessage<RobloxAuthSessionToken>(API_ACTIONS.ROBLOX_AUTH_EXCHANGE, {});
-	}
-
-	async logoutRobloxAuth(): Promise<void> {
-		await sendMessage<null>(API_ACTIONS.ROBLOX_AUTH_LOGOUT, {});
-	}
-
-	async logoutAllRobloxAuth(): Promise<RobloxAuthLogoutAll> {
-		return sendMessage<RobloxAuthLogoutAll>(API_ACTIONS.ROBLOX_AUTH_LOGOUT_ALL, {});
-	}
-
-	async getMeProfile(): Promise<MeProfile> {
-		return sendMessage<MeProfile>(API_ACTIONS.ME_GET_PROFILE, {});
-	}
-
-	async updateMeSettings(patch: MeSettingsPatch): Promise<MeSettingsResponse> {
-		const payload: Record<string, unknown> = {};
-		if ('alias' in patch) payload['alias'] = patch.alias ?? null;
-		if (patch.show_username !== undefined) payload['showUsername'] = patch.show_username;
-		if (patch.show_thumbnail !== undefined) payload['showThumbnail'] = patch.show_thumbnail;
-		return sendMessage<MeSettingsResponse>(API_ACTIONS.ME_UPDATE_SETTINGS, payload);
-	}
-
-	async refreshMeIdentity(): Promise<MeRefreshResult> {
-		return sendMessage<MeRefreshResult>(API_ACTIONS.ME_REFRESH_IDENTITY, {});
-	}
-
-	async listMeSessions(): Promise<MeSession[]> {
-		return sendMessage<MeSession[]>(API_ACTIONS.ME_LIST_SESSIONS, {});
-	}
-
-	async revokeMeSession(sessionId: string): Promise<void> {
-		await sendMessage<null>(API_ACTIONS.ME_REVOKE_SESSION, { sessionId });
-	}
-
-	async getLeaderboard(
-		window: LeaderboardWindow,
-		opts: { limit?: number; cursor?: number; signal?: AbortSignal } = {}
-	): Promise<Leaderboard> {
-		return sendMessage<Leaderboard>(
-			API_ACTIONS.GET_LEADERBOARD,
-			{
-				window,
-				...(opts.limit !== undefined && { limit: opts.limit }),
-				...(opts.cursor !== undefined && { cursor: opts.cursor })
-			},
-			{ signal: opts.signal }
+		const result = await sendMessage<{ success: boolean; data?: unknown; error?: string }>(
+			API_ACTIONS.API_WHOAMI,
+			{ apiKey }
 		);
+		logger.debug('[apiClient] whoami response', {
+			success: result.success,
+			hasError: !!result.error,
+			hasData: !!result.data,
+			error: result.error
+		});
+		return result;
 	}
 }
 

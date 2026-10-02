@@ -24,10 +24,6 @@
 	&.active {
 		@apply font-semibold;
 		color: var(--color-text-heading);
-
-		.navbar-tab-count {
-			color: var(--color-primary);
-		}
 	}
 
 	&.active::after {
@@ -48,11 +44,6 @@
 	}
 }
 
-@utility navbar-tab-count {
-	@apply text-xs-plus font-medium;
-	color: var(--color-text-subtle);
-}
-
 @utility page-content {
 	@apply flex flex-col gap-3;
 }
@@ -62,9 +53,5 @@
 }
 
 @utility settings-page {
-	@apply flex flex-col;
-}
-
-@utility queue-page {
 	@apply flex flex-col;
 }

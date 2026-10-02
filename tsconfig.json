@@ -34,5 +34,5 @@
 		"noPropertyAccessFromIndexSignature": true
 	},
 	"include": ["**/*", ".wxt/wxt.d.ts"],
-	"exclude": [".output", ".wxt/chrome-data", "node_modules"]
+	"exclude": [".output", ".wxt/chrome-data", "node_modules", ".kilo"]
 }

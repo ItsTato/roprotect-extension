@@ -1,7 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import { settings, updateSetting } from './settings';
 import { SETTINGS_KEYS } from '../types/settings';
-import { REQUIRED_LEGAL_VERSION } from '../types/constants';
 import { getLatestChangelog } from './changelog';
 
 const forceShowOnboarding = writable(false);
@@ -24,7 +23,7 @@ export function dismissOnboarding(): void {
 // Marks onboarding done, accepts the current legal version, and stamps the latest changelog as seen
 export async function completeOnboarding(): Promise<void> {
 	await updateSetting(SETTINGS_KEYS.ONBOARDING_COMPLETED, true);
-	await updateSetting(SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION, REQUIRED_LEGAL_VERSION);
+	await updateSetting(SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION, '2.17.1');
 	await updateSetting(SETTINGS_KEYS.LEGAL_DECLINED, false);
 	const latest = getLatestChangelog();
 	if (latest) {

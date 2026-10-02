@@ -1,29 +1,42 @@
 import { REASON_KEYS } from '../../types/constants';
-import { ROTECTOR_API_ID } from '../../stores/custom-apis';
 import type { CombinedStatus } from '../../types/custom-api';
 import type { EntityStatus } from '../../types/api';
 import { extractFlaggedOutfits, type FlaggedOutfitInfo } from './violation-formatter';
+import { pickHighestSeveritySystemResult } from './status-utils';
 
-function getRotectorData<T extends EntityStatus>(
+// The verdict that stands for the user across the system providers, so a flagged RAB/TASE
+// result is never hidden behind a clean SIGMANET one.
+function getSystemApiData<T extends EntityStatus>(
 	combined: CombinedStatus<T> | null | undefined
 ): T | undefined {
-	return combined?.get(ROTECTOR_API_ID)?.data;
+	return pickHighestSeveritySystemResult(combined)?.[1].data;
 }
 
 // Get flagged outfit info from a combined status map (user only)
 export function getRotectorOutfitEvidence(
 	combined: CombinedStatus | null | undefined
 ): FlaggedOutfitInfo[] | null {
-	const evidence = getRotectorData(combined)?.reasons[REASON_KEYS.AVATAR_OUTFIT]?.evidence;
+	const data = getSystemApiData(combined);
+	if (!data) return null;
+	const evidence = data.reasons[REASON_KEYS.AVATAR_OUTFIT]?.evidence;
 	if (!evidence) return null;
 	return extractFlaggedOutfits(evidence);
 }
 
-// Get the membership badge from rotector data, if present (user only)
+// Get the membership badge from system API data, if present (user only).
+// Scans every provider rather than reading the representative verdict's copy: membership is a
+// profile attribute that only one of the services may report, so a stricter verdict elsewhere
+// must not make the badge disappear.
 export function getRotectorMembershipBadge(combined: CombinedStatus | null | undefined) {
-	const data = getRotectorData(combined);
-	if (!data || !('membershipBadge' in data)) return null;
-	return data.membershipBadge ?? null;
+	if (!combined) return null;
+
+	for (const [id, result] of combined.entries()) {
+		if (!id.startsWith('system-') || !result.data) continue;
+		if (!('membershipBadge' in result.data)) continue;
+		if (result.data.membershipBadge) return result.data.membershipBadge;
+	}
+
+	return null;
 }
 
 interface VisibleBadgesInput {

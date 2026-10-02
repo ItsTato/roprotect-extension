@@ -2,6 +2,11 @@
 	import { showError } from '@/lib/stores/toast';
 	import { asApiError } from '@/lib/utils/api/api-error';
 	import { importApi, importCustomApi } from '@/lib/utils/api/api-export';
+	import {
+		CUSTOM_API_FILE_EXTENSION,
+		CUSTOM_API_IMPORT_EXTENSIONS,
+		CUSTOM_API_LEGACY_FILE_EXTENSIONS
+	} from '@/lib/types/constants';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { _ } from 'svelte-i18n';
 	import { Upload } from '@lucide/svelte';
@@ -25,7 +30,8 @@
 			return;
 		}
 
-		if (!file.name.endsWith('.rotector-api')) {
+		const accepted = [CUSTOM_API_FILE_EXTENSION, ...CUSTOM_API_LEGACY_FILE_EXTENSIONS];
+		if (!accepted.some((extension) => file.name.toLowerCase().endsWith(extension))) {
 			showError($_('custom_api_import_error_invalid_file_extension'));
 			input.value = '';
 			return;
@@ -110,7 +116,7 @@
 		<input
 			id="file-upload"
 			class="form-file-input"
-			accept=".rotector-api"
+			accept={CUSTOM_API_IMPORT_EXTENSIONS}
 			onchange={handleFileUpload}
 			type="file"
 		/>

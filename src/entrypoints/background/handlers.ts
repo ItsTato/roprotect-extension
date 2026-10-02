@@ -1,6 +1,6 @@
-import type { MembershipBadgeUpdatePayload, MeSettingsPatch } from '@/lib/types/api';
-import type { ContentMessage } from '@/lib/schemas/content-message';
 import { API_ACTIONS } from '@/lib/types/constants';
+import type { MembershipBadgeUpdatePayload } from '@/lib/types/api';
+import type { ContentMessage } from '@/lib/schemas/content-message';
 import {
 	getUnprocessedUserIdsFromStorage,
 	isUserBeingProcessedInStorage
@@ -10,13 +10,11 @@ import {
 	checkMultipleGroups,
 	checkMultipleUsers,
 	checkUserStatus,
+	getDiscordAvatars,
 	getGroupTrackedUsers,
 	getQueueLimits,
-	getStats,
-	getVotes,
 	lookupRobloxUserDiscord,
-	queueUser,
-	submitVote
+	queueUser
 } from './endpoints/core';
 import { fetchOutfitImages, lookupOutfitsById, lookupOutfitsByName } from './endpoints/outfits';
 import {
@@ -26,24 +24,10 @@ import {
 	getMembershipVerification,
 	updateMembershipBadge
 } from './endpoints/extension';
-import { customApiCheckUser, customApiCheckMultipleUsers } from './endpoints/custom';
+import { customApiCheckUser, customApiCheckMultipleUsers, apiWhoami } from './endpoints/custom';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
-import {
-	exchangeMembershipForSession,
-	logoutAllRobloxAuth,
-	logoutRobloxAuth,
-	requestRobloxAuthChallenge,
-	verifyRobloxAuth
-} from './endpoints/roblox-auth';
-import {
-	getMeProfile,
-	listMeSessions,
-	refreshMeIdentity,
-	revokeMeSession,
-	updateMeSettings
-} from './endpoints/me';
-import { getLeaderboard } from './endpoints/leaderboard';
+import { getApiUsage } from './endpoints/usage';
 
 // Dispatches a validated content message to its endpoint handler. Required-field
 // validation lives in the schema (`ContentMessageSchema`), so handlers here
@@ -57,25 +41,30 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			// Use primary database if user is queued but not yet processed
 			const userId = typeof msg.userId === 'string' ? Number.parseInt(msg.userId, 10) : msg.userId;
 			const readPrimary = await isUserBeingProcessedInStorage(userId);
-			return checkUserStatus(msg.userId, msg.clientId, readPrimary);
+			return checkUserStatus(msg.userId, msg.clientId ?? undefined, readPrimary);
 		}
 		case API_ACTIONS.CHECK_GROUP_STATUS: {
-			return checkGroupStatus(msg.groupId, msg.clientId);
+			return checkGroupStatus(msg.groupId, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.CHECK_MULTIPLE_USERS: {
 			if (msg.apiConfig) {
 				return customApiCheckMultipleUsers(msg.apiConfig, msg.userIds);
 			}
 			// Use primary database if any user is queued but not yet processed
-			const userIds = msg.userIds.map((id) =>
+			const userIds = msg.userIds.map((id: string | number) =>
 				typeof id === 'string' ? Number.parseInt(id, 10) : id
 			);
 			const unprocessed = await getUnprocessedUserIdsFromStorage(userIds);
 			const readPrimary = unprocessed.length > 0;
-			return checkMultipleUsers(msg.userIds, msg.clientId, msg.lookupContext, readPrimary);
+			return checkMultipleUsers(
+				msg.userIds,
+				msg.clientId ?? undefined,
+				msg.lookupContext,
+				readPrimary
+			);
 		}
 		case API_ACTIONS.CHECK_MULTIPLE_GROUPS: {
-			return checkMultipleGroups(msg.groupIds, msg.clientId, msg.lookupContext);
+			return checkMultipleGroups(msg.groupIds, msg.clientId ?? undefined, msg.lookupContext);
 		}
 		case API_ACTIONS.GET_GROUP_TRACKED_USERS: {
 			return getGroupTrackedUsers(msg.groupId, msg.cursor, msg.limit, msg.active);
@@ -88,21 +77,15 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 				msg.inappropriateProfile,
 				msg.inappropriateFriends,
 				msg.inappropriateGroups,
-				msg.clientId,
+				msg.clientId ?? undefined,
 				msg.captchaToken
 			);
 		}
 		case API_ACTIONS.GET_QUEUE_LIMITS: {
-			return getQueueLimits(msg.clientId);
+			return getQueueLimits(msg.clientId ?? undefined);
 		}
-		case API_ACTIONS.SUBMIT_VOTE: {
-			return submitVote(msg.userId, msg.voteType, msg.clientId);
-		}
-		case API_ACTIONS.GET_VOTES: {
-			return getVotes(msg.userId, msg.clientId);
-		}
-		case API_ACTIONS.GET_STATS: {
-			return getStats(msg.hours);
+		case API_ACTIONS.GET_USAGE: {
+			return getApiUsage();
 		}
 		case API_ACTIONS.EXTENSION_GET_MEMBERSHIP_STATUS: {
 			return getMembershipStatus();
@@ -128,13 +111,13 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			return confirmMembershipVerification(msg.robloxUserId);
 		}
 		case API_ACTIONS.LOOKUP_ROBLOX_USER_DISCORD: {
-			return lookupRobloxUserDiscord(msg.userId, msg.clientId);
+			return lookupRobloxUserDiscord(msg.userId, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.LOOKUP_OUTFITS_BY_NAME: {
-			return lookupOutfitsByName(msg.userId, msg.names, msg.clientId);
+			return lookupOutfitsByName(msg.userId, msg.names, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.LOOKUP_OUTFITS_BY_ID: {
-			return lookupOutfitsById(msg.userId, msg.ids, msg.clientId);
+			return lookupOutfitsById(msg.userId, msg.ids, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.FETCH_OUTFIT_IMAGES: {
 			return fetchOutfitImages(msg.imageUrls);
@@ -162,45 +145,11 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			});
 			return { granted };
 		}
-		case API_ACTIONS.ROBLOX_AUTH_CHALLENGE: {
-			return requestRobloxAuthChallenge(msg.robloxUserId);
+		case API_ACTIONS.API_WHOAMI: {
+			return apiWhoami(msg.apiKey);
 		}
-		case API_ACTIONS.ROBLOX_AUTH_VERIFY: {
-			return verifyRobloxAuth(msg.challengeId);
-		}
-		case API_ACTIONS.ROBLOX_AUTH_EXCHANGE: {
-			return exchangeMembershipForSession();
-		}
-		case API_ACTIONS.ROBLOX_AUTH_LOGOUT: {
-			return logoutRobloxAuth();
-		}
-		case API_ACTIONS.ROBLOX_AUTH_LOGOUT_ALL: {
-			return logoutAllRobloxAuth();
-		}
-		case API_ACTIONS.ME_GET_PROFILE: {
-			return getMeProfile();
-		}
-		case API_ACTIONS.ME_UPDATE_SETTINGS: {
-			const patch: MeSettingsPatch = {};
-			if (msg.alias !== undefined) patch.alias = msg.alias;
-			if (msg.showUsername !== undefined) patch.show_username = msg.showUsername;
-			if (msg.showThumbnail !== undefined) patch.show_thumbnail = msg.showThumbnail;
-			if (Object.keys(patch).length === 0) {
-				throw new Error('Provide at least one settings field to update.');
-			}
-			return updateMeSettings(patch);
-		}
-		case API_ACTIONS.ME_REFRESH_IDENTITY: {
-			return refreshMeIdentity();
-		}
-		case API_ACTIONS.ME_LIST_SESSIONS: {
-			return listMeSessions();
-		}
-		case API_ACTIONS.ME_REVOKE_SESSION: {
-			return revokeMeSession(msg.sessionId);
-		}
-		case API_ACTIONS.GET_LEADERBOARD: {
-			return getLeaderboard(msg.window, msg.limit, msg.cursor);
+		case API_ACTIONS.GET_DISCORD_AVATARS: {
+			return getDiscordAvatars(msg.discordUserIds, msg.clientId ?? undefined);
 		}
 	}
 }
