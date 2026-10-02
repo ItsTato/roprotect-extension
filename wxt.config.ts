@@ -66,7 +66,7 @@ export default defineConfig({
 			name: '__MSG_extensionName__',
 			description: '__MSG_extensionDescription__',
 			default_locale: 'en',
-			version: '2.20.0',
+			version: '2.21.0',
 			minimum_chrome_version: '128',
 			permissions: ['storage', 'notifications', ...robloxFetch],
 			host_permissions: [

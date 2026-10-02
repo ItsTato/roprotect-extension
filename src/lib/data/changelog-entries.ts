@@ -2,6 +2,28 @@ import type { Changelog } from '@/lib/types/changelog';
 
 export const CHANGELOGS: Changelog[] = [
 	{
+		id: 'v2.21.0',
+		version: '2.21.0',
+		date: '2026-10-01',
+		title: 'Group verdicts move to SCSN, and a richer tooltip',
+		summary:
+			'Group verdicts now come from SCSN, the tooltip grows a TASE V2 account header with Discord avatars, and the extension icon has been refreshed.',
+		changes: [
+			{
+				type: 'changed',
+				description: 'Group verdicts are now served by SCSN instead of the first-party backend'
+			},
+			{
+				type: 'added',
+				description: 'Tooltip now shows a TASE V2 account header, including Discord avatars'
+			},
+			{
+				type: 'changed',
+				description: 'Refreshed extension icon'
+			}
+		]
+	},
+	{
 		id: 'v2.20.0',
 		version: '2.20.0',
 		date: '2026-09-28',
