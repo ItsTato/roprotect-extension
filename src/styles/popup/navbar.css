@@ -44,14 +44,18 @@
 	}
 }
 
-@utility page-content {
+/* NOTE: content.css is injected into every Roblox page (manifest content_scripts
+   css), so popup layout classes must stay prefixed — a bare name like
+   `page-content` matches Roblox's own markup (e.g. #game-detail-page) and breaks
+   page layout. */
+@utility rotector-page-content {
 	@apply flex flex-col gap-3;
 }
 
-@utility stats-page {
+@utility rotector-stats-page {
 	@apply flex flex-col;
 }
 
-@utility settings-page {
+@utility rotector-settings-page {
 	@apply flex flex-col;
 }

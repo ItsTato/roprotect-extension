@@ -23,10 +23,46 @@ import { get } from 'svelte/store';
 interface QueryMultipleUsersOptions {
 	lookupContext?: string | undefined;
 	signal?: AbortSignal | undefined;
-	onUpdate?: ((userId: string, status: CombinedStatus<UserStatus>) => void) | undefined;
+	onUpdate?:
+		| ((
+				userId: string,
+				status: CombinedStatus<UserStatus>,
+				providers: BatchProviderProgress[]
+		  ) => void)
+		| undefined;
+}
+
+// Per-provider resolution counts for batch queries, so progress UI can advance
+// as each provider answers instead of waiting for the slowest one.
+export interface BatchProviderProgress {
+	apiId: string;
+	apiName: string;
+	logoUrl: string;
+	resolved: number;
+	total: number;
 }
 
 const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
+
+// SCSN answers slowly, so split it into smaller chunks: the first answers land
+// sooner (progress keeps moving) and less work is lost when a chunk times out.
+const SYSTEM_API_BATCH_SIZES: Record<string, number> = {
+	'system-scsn': 25,
+	'system-tase': 25
+};
+
+function batchSizeFor(api: CustomApiConfig): number {
+	return SYSTEM_API_BATCH_SIZES[api.id] ?? API_CONFIG.BATCH_SIZE;
+}
+
+const SYSTEM_API_BATCH_DELAYS: Record<string, number> = {
+	'system-scsn': 50,
+	'system-tase': 50
+};
+
+function batchDelayFor(api: CustomApiConfig): number {
+	return SYSTEM_API_BATCH_DELAYS[api.id] ?? API_CONFIG.BATCH_DELAY;
+}
 
 function shouldBlockLookup(userId: string): boolean {
 	const { isRestricted } = get(restrictedAccessStore);
@@ -222,11 +258,29 @@ export async function queryMultipleUsers(
 			timestamp: Date.now(),
 			landscapeImageDataUrl: api.landscapeImageDataUrl
 		});
-		onUpdate?.(userId, new Map(combined));
+		const resolveKey = `${api.id}:${userId}`;
+		if (!resolvedKeys.has(resolveKey)) {
+			resolvedKeys.add(resolveKey);
+			resolvedCounts.set(api.id, (resolvedCounts.get(api.id) ?? 0) + 1);
+		}
+		onUpdate?.(userId, new Map(combined), snapshotProviders());
 	};
 
 	const systemApis = enabledApis.filter(isSystemApi);
 	const customApisList = enabledApis.filter((api) => !isSystemApi(api));
+
+	// Tracks how many users each system provider has resolved, so callers can
+	// report per-provider progress while slower providers are still fetching.
+	const resolvedCounts = new Map<string, number>(systemApis.map((api) => [api.id, 0]));
+	const resolvedKeys = new Set<string>();
+	const snapshotProviders = (): BatchProviderProgress[] =>
+		systemApis.map((api) => ({
+			apiId: api.id,
+			apiName: api.name,
+			logoUrl: api.landscapeImageDataUrl ?? '',
+			resolved: resolvedCounts.get(api.id) ?? 0,
+			total: userIds.length
+		}));
 
 	// A batch response omits users the upstream has no record of. Left unset, that entry
 	// would carry neither data nor error with loading already false, which is
@@ -283,9 +337,9 @@ export async function queryMultipleUsers(
 					}
 				};
 
-				const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
+				const chunks = chunkArray(toFetch, batchSizeFor(api));
 				for (const [i, chunk] of chunks.entries()) {
-					if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
+					if (i > 0) await abortableSleep(batchDelayFor(api), signal);
 					if (signal?.aborted) throw getAbortError(signal);
 					await processChunk(chunk);
 				}

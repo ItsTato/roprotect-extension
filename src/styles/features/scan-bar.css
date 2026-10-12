@@ -35,6 +35,20 @@
 	color: var(--color-text-subtle);
 }
 
+@utility rotector-scan-progress-detail {
+	@apply inline-flex! items-center gap-2 align-middle text-[11px]! font-normal! whitespace-nowrap;
+	color: var(--color-text-subtle);
+	opacity: 0.85;
+}
+
+@utility rotector-scan-provider-chip {
+	@apply inline-flex items-center gap-1 align-middle proportional-nums!;
+}
+
+@utility rotector-scan-provider-logo {
+	@apply block shrink-0 rounded-full;
+}
+
 /* =================================
    RESULTS BAR
    ================================= */

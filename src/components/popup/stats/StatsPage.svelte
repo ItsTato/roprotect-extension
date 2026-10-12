@@ -2,6 +2,6 @@
 	import ApiUsageSection from './ApiUsageSection.svelte';
 </script>
 
-<div class="stats-page">
+<div class="rotector-stats-page">
 	<ApiUsageSection />
 </div>

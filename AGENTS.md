@@ -55,7 +55,7 @@ Entrypoints are WXT-discovered; `src/entrypoints/` maps 1:1 to runtime contexts:
 
 **Adding support for a Roblox page touches four files:** `PAGE_TYPES` (`src/lib/types/constants.ts`) → `detectPageType` (`src/lib/utils/dom/page-detection.ts`) → a controller factory in `PageControllerManager` → a Svelte `*PageManager.svelte` under `src/components/features/`.
 
-**Content-script UI lives in a shadow root.** `content.ts` calls `createShadowRootUi` (`rotector-overlay`) and mounts `OverlayRoot.svelte` inside. Consequences:
+**Content-script UI lives in a shadow root.** `content.ts` calls `createShadowRootUi` (`rotector-overlay`) and mounts `OverlayRoot.svelte` inside. But the same `content-scripts/content.css` is **also injected page-global** via the manifest `content_scripts` `css` array, so every class in `src/styles/` applies to Roblox's own markup too. Keep class names prefixed (`rotector-*`, feature-specific) — a bare name like `page-content` matched `#game-detail-page` and broke game/settings page layout. Consequences:
 
 - Roblox DOM is reached through `src/lib/controllers/selectors/*` and mutated via the controller/`mounted-component-registry`, not by styling Roblox's classes.
 - Injected CSS has `:root` rewritten to `:host`; a bare attribute selector won't match the shadow host.
