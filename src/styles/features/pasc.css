@@ -1,0 +1,201 @@
+/* =================================
+   PASC PROVIDER (MOCKUP SCAFFOLD — see T:\Python Projects\TLET\PASC\PASC.md)
+   Class prefix: pasc-
+   ================================= */
+
+@utility pasc-container {
+	@apply flex flex-col gap-4;
+}
+
+@utility pasc-header {
+	@apply flex items-center gap-2.5;
+}
+
+@utility pasc-header-logo {
+	@apply block h-7 shrink-0 inline-auto;
+}
+
+@utility pasc-access-chip {
+	@apply inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]! font-medium!;
+	border-color: var(--color-border-subtle);
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-columns {
+	@apply grid gap-4;
+	grid-template-columns: 1fr 1fr;
+}
+
+@utility pasc-column-title {
+	@apply m-0 text-[12px]! font-semibold! tracking-wide uppercase;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-provider-row {
+	@apply flex items-center gap-2.5 rounded-md px-3 py-2;
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-provider-name {
+	@apply shrink-0 text-[12px]! font-semibold!;
+}
+
+@utility pasc-provider-detail {
+	@apply min-w-0 flex-1 truncate text-[12px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-note {
+	@apply rounded-md px-3 py-2 text-[12px]!;
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-note-label {
+	@apply mb-1 block text-[11px]! font-semibold! tracking-wide uppercase;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-meta {
+	@apply text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-edit-button {
+	@apply cursor-pointer rounded-md border px-2 py-1 text-[12px]! font-medium!;
+	border-color: var(--color-border);
+	color: var(--color-text);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
+/* ---- Edit modal ---- */
+
+@utility pasc-field {
+	@apply flex flex-col gap-1;
+}
+
+@utility pasc-field-label {
+	@apply text-[12px]! font-semibold!;
+}
+
+@utility pasc-field-row {
+	@apply flex items-center gap-2;
+}
+
+@utility pasc-textarea {
+	@apply min-h-20 rounded-md border p-2 text-[12px]! inline-full;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+}
+
+@utility pasc-select {
+	@apply rounded-md border px-2 py-1 text-[12px]!;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+}
+
+@utility pasc-flag-options {
+	@apply flex flex-wrap gap-1.5;
+}
+
+@utility pasc-flag-option {
+	@apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-center text-[12px]! font-medium!;
+	border-color: var(--color-border);
+	background-color: transparent;
+	color: var(--color-text-subtle);
+
+	&.selected {
+		border-color: var(--color-primary);
+		color: var(--color-text-heading);
+	}
+}
+
+@utility pasc-file-row {
+	@apply flex cursor-pointer items-center gap-2 rounded-md border-0 px-3 py-2 text-start text-[12px]! inline-full;
+	background-color: var(--color-bg-tertiary);
+	color: var(--color-text);
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
+@utility pasc-file-name {
+	@apply min-w-0 flex-1 truncate font-medium!;
+}
+
+@utility pasc-file-meta {
+	@apply shrink-0 text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-file-viewer {
+	@apply mt-2 flex flex-col gap-1 rounded-md border p-2;
+	border-color: var(--color-border-subtle);
+}
+
+@utility pasc-markdown {
+	@apply flex flex-col gap-1.5 text-[12px]!;
+
+	& p {
+		@apply m-0;
+	}
+
+	& ul {
+		@apply m-0 flex flex-col gap-1 ps-4;
+	}
+
+	& h1,
+	& h2,
+	& h3 {
+		@apply m-0 text-[13px]! font-semibold!;
+		color: var(--color-text-heading);
+	}
+}
+
+@utility pasc-modal-actions {
+	@apply flex shrink-0 items-center justify-end gap-2;
+	padding-bottom: 1.125rem;
+}
+
+@utility pasc-modal-body {
+	@apply min-h-0 flex-1 overflow-y-auto;
+}
+
+@utility pasc-editor-layout {
+	@apply grid gap-2;
+	grid-template-columns: 1fr 1fr;
+}
+
+@utility pasc-editor-pane {
+	@apply flex flex-col overflow-hidden rounded-md border;
+	height: 240px;
+	border-color: var(--color-border);
+
+	& .cm-editor {
+		height: 100%;
+	}
+
+	& .cm-scroller {
+		overflow-y: auto;
+	}
+}
+
+@utility pasc-preview-pane {
+	@apply overflow-auto rounded-md border p-2 text-[12px]!;
+	height: 240px;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+}
+
+@utility pasc-mock-banner {
+	@apply rounded-md border border-dashed px-2 py-1 text-[11px]!;
+	border-color: var(--color-border);
+	color: var(--color-text-subtle);
+}

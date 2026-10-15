@@ -149,3 +149,22 @@ export interface ExportResult {
 export type DiscordAccountInfo = v.InferOutput<typeof DiscordAccountInfoSchema>;
 export type RobloxAltAccount = v.InferOutput<typeof RobloxAltAccountSchema>;
 export type RobloxUserDiscordLookup = v.InferOutput<typeof RobloxUserDiscordLookupSchema>;
+
+// PASC case-file descriptor, as returned by the proxied upload endpoint.
+export interface PascFileDescriptor {
+	fileId: string;
+	name: string | null;
+	size: number | null;
+	access: string | null;
+}
+
+// PASC record upsert body. Only flag is validated proxy-side; every other
+// field belongs to the PASC record schema and passes through verbatim.
+export interface PascRecordUpsert {
+	flag: number;
+	accessLevel?: string | undefined;
+	publicNote?: string | undefined;
+	publicNoteLevel?: string | undefined;
+	internalReview?: string | undefined;
+	reviewer?: string | undefined;
+}

@@ -1,5 +1,5 @@
 import { API_ACTIONS } from '@/lib/types/constants';
-import type { MembershipBadgeUpdatePayload } from '@/lib/types/api';
+import type { MembershipBadgeUpdatePayload, PascRecordUpsert } from '@/lib/types/api';
 import type { ContentMessage } from '@/lib/schemas/content-message';
 import {
 	getUnprocessedUserIdsFromStorage,
@@ -25,6 +25,7 @@ import {
 	updateMembershipBadge
 } from './endpoints/extension';
 import { customApiCheckUser, customApiCheckMultipleUsers, apiWhoami } from './endpoints/custom';
+import { getPascClearance, uploadPascFile, upsertPascRecord } from './endpoints/pasc';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
 import { getApiUsage } from './endpoints/usage';
@@ -150,6 +151,19 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		}
 		case API_ACTIONS.GET_DISCORD_AVATARS: {
 			return getDiscordAvatars(msg.discordUserIds, msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.GET_PASC_CLEARANCE: {
+			return getPascClearance(msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.PASC_UPSERT_RECORD: {
+			return upsertPascRecord(
+				msg.userId,
+				msg.record as unknown as PascRecordUpsert,
+				msg.clientId ?? undefined
+			);
+		}
+		case API_ACTIONS.PASC_UPLOAD_FILE: {
+			return uploadPascFile(msg.userId, msg.filename, msg.bytes, msg.contentType, msg.access);
 		}
 	}
 }

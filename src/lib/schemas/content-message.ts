@@ -156,6 +156,25 @@ const ContentMessageSchema = v.variant('action', [
 		action: v.literal(API_ACTIONS.GET_DISCORD_AVATARS),
 		discordUserIds: v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(100)),
 		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.GET_PASC_CLEARANCE),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_UPSERT_RECORD),
+		userId: UserId,
+		record: v.record(v.string(), v.unknown()),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_UPLOAD_FILE),
+		userId: UserId,
+		filename: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		contentType: v.optional(v.string()),
+		access: v.optional(v.picklist(['0', 'A1', 'A2', 'M1', 'M2'])),
+		bytes: v.instance(ArrayBuffer),
+		clientId: ClientId
 	})
 ]);
 

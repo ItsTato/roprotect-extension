@@ -14,14 +14,15 @@
 	import type { ReviewerInfo, UserStatus, ApiResponse } from '@/lib/types/api';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { extractErrorMessage, sanitizeEntityId } from '@/lib/utils/dom/sanitizer';
-	import { calculateStatusBadges } from '@/lib/utils/status/status-utils';
+	import { calculateStatusBadges, isPascRecordPresent } from '@/lib/utils/status/status-utils';
 	import { ENGINE_STATUS_BY_COMPAT, ENGINE_STATUS_KEY } from '@/lib/utils/status/engine-status';
 	import {
 		outfitSnapshotService,
 		type SnapshotKey,
 		type SnapshotMaps
 	} from '@/lib/services/rotector/outfit-snapshot';
-	import { pickDefaultTab } from '@/lib/services/rotector/unified-query';
+	import { pickDefaultTab, getEnabledCustomApis } from '@/lib/services/rotector/unified-query';
+	import { apiClient } from '@/lib/services/rotector/api-client';
 	import {
 		getRotectorMembershipBadge,
 		getRotectorOutfitEvidence
@@ -36,6 +37,29 @@
 	} from '@/lib/utils/status/violation-formatter';
 	import type { TaseUserRecord, DiscordAvatar } from '@/lib/schemas/custom-api';
 	import TaseV2Display from './TaseV2Display.svelte';
+	// Live PASC wiring (real lookup data mapped onto the tab view model). The
+	// MOCK_* preview below stays until whoami reports system-pasc.
+	import PascDisplay from './PascDisplay.svelte';
+	import PascEditModal from './PascEditModal.svelte';
+	import {
+		liveProviderVerdicts,
+		mapPascUserStatus,
+		pickLivePascReferral
+	} from '@/lib/utils/status/pasc-record';
+	import {
+		ensurePascClearance,
+		pascCanEdit,
+		pascViewerLevel as pascClearanceLevel
+	} from '@/lib/stores/pasc-clearance';
+	import {
+		MOCK_PASC_DISCORD_ACCOUNTS,
+		MOCK_PASC_RECORD,
+		PASC_FLAG_TO_NUMERIC,
+		type PascAccessLevel,
+		type PascDiscordAccount,
+		type PascRecord
+	} from '@/lib/data/pasc-mock';
+	import { getAssetUrl } from '@/lib/utils/assets';
 	import {
 		detectPageContext,
 		extractGroupInfo,
@@ -258,7 +282,7 @@
 	const tabs = $derived.by(() => {
 		if (!userStatus) return [];
 
-		return Array.from(userStatus.entries(), ([apiId, result]) => ({
+		const entries = Array.from(userStatus.entries(), ([apiId, result]) => ({
 			id: apiId,
 			name: result.apiName,
 			loading: result.loading,
@@ -266,7 +290,141 @@
 			noData: !result.loading && !result.error && !result.data,
 			landscapeImageDataUrl: result.landscapeImageDataUrl
 		}));
+		// MOCK ONLY — the PASC tab renders mock data until the backend reports
+		// system-pasc (see T:\Python Projects\TLET\PASC\PASC.md). Intentionally ungated: remove this entry
+		// together with the content branch once the real provider ships.
+		if (!entries.some((tab) => tab.id === 'system-pasc')) {
+			entries.push({
+				id: 'system-pasc',
+				name: 'PASC',
+				loading: false,
+				error: false,
+				noData: false,
+				landscapeImageDataUrl: getAssetUrl('/assets/pasc-tab.png')
+			});
+		}
+		return entries;
 	});
+
+	// MOCK ONLY — edit-modal state + full-clearance viewer for the PASC preview.
+	// Used only while whoami does not report system-pasc (no live entry).
+	let pascEditing = $state(false);
+	const pascViewerLevel = 'M2' as PascAccessLevel;
+
+	// Live PASC state: true once the backend reports system-pasc and the lookup
+	// entry exists. The mock preview above stays for builds without it.
+	const pascLive = $derived(userStatus?.has('system-pasc') ?? false);
+	const pascResult = $derived(userStatus?.get('system-pasc') ?? null);
+
+	const pascDisplayRecord = $derived.by((): PascRecord | null => {
+		const data =
+			pascSavedStatus ?? (isGroup ? undefined : (pascResult?.data as UserStatus | undefined));
+		if (!data) return null;
+		const mapped = mapPascUserStatus(data, {
+			userId: sanitizedUserId,
+			displayName: userDisplayName ?? userInfo?.displayName,
+			username: userUsername ?? userInfo?.username
+		});
+		if (!mapped) return null;
+		return {
+			...mapped,
+			providerVerdicts: liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)
+		};
+	});
+
+	const pascReferral = $derived.by(() => {
+		if (!pascLive || isGroup || pascDisplayRecord) return null;
+		return pickLivePascReferral(userStatus as CombinedStatus<UserStatus>);
+	});
+
+	// Creation draft for M1+ viewers when no record exists: blank shell preset
+	// from the referral verdict at the viewer's own level. Below M1 this stays
+	// null and the tab remains referral-only.
+	const pascDraft = $derived.by((): PascRecord | null => {
+		if (!pascLive || isGroup || pascDisplayRecord) return null;
+		if (!$pascCanEdit) return null;
+		return {
+			userId: sanitizedUserId,
+			displayName: userDisplayName ?? userInfo?.displayName ?? sanitizedUserId,
+			username: userUsername ?? userInfo?.username ?? sanitizedUserId,
+			flag: pascReferral?.flag ?? 'safe',
+			accessLevel: $pascClearanceLevel,
+			reviewer: '',
+			updatedAt: '',
+			publicNote: '',
+			internalReview: '',
+			internalReviewMinLevel: 'M1',
+			files: [],
+			providerVerdicts: liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)
+		};
+	});
+
+	const pascDiscordAccounts = $derived.by((): PascDiscordAccount[] => {
+		if (!taseV2Record) return [];
+		return Object.entries(taseV2Record.detections).map(([discordId, account]) => {
+			const avatar = taseAvatars[discordId];
+			const fallback = avatar?.globalName || avatar?.username || discordId;
+			return {
+				id: discordId,
+				username: avatar?.username || discordId,
+				globalName: avatar?.globalName || fallback,
+				avatarDataUrl: avatar?.avatarDataUrl ?? null,
+				serverCount: account.detectedGuilds.length,
+				servers: account.detectedGuilds.map((guild) => ({
+					id: guild.guildId,
+					name: guild.guildName || guild.guildId,
+					flagType: guild.flag_type
+				}))
+			};
+		});
+	});
+
+	const pascHeaderBadge = $derived.by(() => {
+		if (!pascLive) {
+			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[MOCK_PASC_RECORD.flag]];
+			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
+		}
+		const data = isGroup ? undefined : (pascResult?.data as UserStatus | undefined);
+		if (data && isPascRecordPresent(pascResult)) {
+			const presentation = STATUS_FLAG_PRESENTATION[data.flagType];
+			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
+		}
+		const referral = pascReferral;
+		if (referral) {
+			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[referral.flag]];
+			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
+		}
+		return null;
+	});
+
+	$effect(() => {
+		if (userStatus?.has('system-pasc')) void ensurePascClearance();
+	});
+
+	// Latest saved PASC state for this user: the upsert response arrives in
+	// lookup shape, so the tab updates instantly without waiting for a refetch.
+	// Cleared whenever the tooltip moves to another user.
+	let pascSavedStatus = $state<UserStatus | null>(null);
+
+	$effect(() => {
+		void userId;
+		pascSavedStatus = null;
+	});
+
+	async function refreshPasc() {
+		const api = getEnabledCustomApis().find((entry) => entry.id === 'system-pasc');
+		if (!api) return;
+		try {
+			pascSavedStatus = await apiClient.checkUser(sanitizedUserId, { apiConfig: api });
+		} catch (error) {
+			logger.warn('[PASC] Refresh after write failed:', error);
+		}
+	}
+
+	function handlePascSaved(status: UserStatus) {
+		pascSavedStatus = status;
+		pascEditing = false;
+	}
 
 	$effect(() => {
 		if (!userStatus) return;
@@ -1103,14 +1261,20 @@
 	});
 
 	$effect(() => {
-		// Fetch TASE V2 data when on the TASE tab and we have a user status with detections
-		if (activeTab !== 'system-tase' || !activeUserStatus || isGroup) return;
-		if (!('detections' in activeUserStatus) || !activeUserStatus.detections) return;
+		// Fetch TASE V2 data when on the TASE tab — or the PASC tab, whose right
+		// column reuses the same account cards — and the combined status holds
+		// a v2 TASE record with detections. v2 keeps scanned-clean accounts
+		// (empty detectedGuilds), so every linked account renders, not just
+		// flagged ones.
+		if ((activeTab !== 'system-tase' && activeTab !== 'system-pasc') || !userStatus || isGroup)
+			return;
+		const taseData = userStatus.get('system-tase')?.data;
+		if (!taseData || !('detections' in taseData) || !taseData.detections) return;
 
 		const loadId = ++latestTaseV2LoadId;
 		async function fetchTaseV2Data() {
 			try {
-				const taseRecord = activeUserStatus as unknown as TaseUserRecord;
+				const taseRecord = taseData as unknown as TaseUserRecord;
 				if (loadId !== latestTaseV2LoadId) return;
 				taseV2Record = taseRecord;
 
@@ -1385,6 +1549,101 @@
 		<div class="error-details">
 			{extractErrorMessage(activeError)}
 		</div>
+	{:else if activeTab === 'system-pasc'}
+		{#if pascLive}
+			{#if pascResult?.loading}
+				<div class="flex items-center justify-center gap-2 py-2">
+					<LoadingSpinner size="small" />
+					<span class="text-xs">{$_('tooltip_loading_user_info')}</span>
+				</div>
+			{:else if pascDisplayRecord}
+				<PascDisplay
+					canEdit={$pascCanEdit && pascDisplayRecord.accessLevel !== null}
+					discordAccounts={pascDiscordAccounts}
+					onEdit={() => (pascEditing = true)}
+					record={pascDisplayRecord}
+					viewerLevel={$pascClearanceLevel}
+				/>
+				{#if pascEditing && pascDisplayRecord.accessLevel !== null}
+					<div
+						class="modal-overlay visible"
+						aria-label="Edit PASC record"
+						aria-modal="true"
+						onclick={(event) => event.stopPropagation()}
+						onkeydown={(event) => {
+							if (event.key === 'Escape') pascEditing = false;
+						}}
+						role="dialog"
+						tabindex="-1"
+					>
+						<PascEditModal
+							mode="edit"
+							onClose={() => (pascEditing = false)}
+							onRefresh={refreshPasc}
+							onSaved={handlePascSaved}
+							record={pascDisplayRecord}
+						/>
+					</div>
+				{/if}
+			{:else}
+				<PascDisplay
+					canEdit={$pascCanEdit}
+					discordAccounts={pascDiscordAccounts}
+					draftRecord={pascDraft}
+					onEdit={() => (pascEditing = true)}
+					record={null}
+					referral={pascReferral}
+					viewerLevel={$pascClearanceLevel}
+				/>
+				{#if pascEditing && pascDraft}
+					<div
+						class="modal-overlay visible"
+						aria-label="Create PASC record"
+						aria-modal="true"
+						onclick={(event) => event.stopPropagation()}
+						onkeydown={(event) => {
+							if (event.key === 'Escape') pascEditing = false;
+						}}
+						role="dialog"
+						tabindex="-1"
+					>
+						<PascEditModal
+							mode="create"
+							onClose={() => (pascEditing = false)}
+							onRefresh={refreshPasc}
+							onSaved={handlePascSaved}
+							record={pascDraft}
+						/>
+					</div>
+				{/if}
+			{/if}
+		{:else}
+			<!-- MOCK ONLY — PASC tab content renders mock data until the backend reports
+			     system-pasc. Intentionally ungated: remove this branch together with
+			     the tab entry once the real provider ships. -->
+			<PascDisplay
+				canEdit
+				discordAccounts={MOCK_PASC_DISCORD_ACCOUNTS}
+				onEdit={() => (pascEditing = true)}
+				record={MOCK_PASC_RECORD}
+				viewerLevel={pascViewerLevel}
+			/>
+			{#if pascEditing}
+				<div
+					class="modal-overlay visible"
+					aria-label="Edit PASC record"
+					aria-modal="true"
+					onclick={(event) => event.stopPropagation()}
+					onkeydown={(event) => {
+						if (event.key === 'Escape') pascEditing = false;
+					}}
+					role="dialog"
+					tabindex="-1"
+				>
+					<PascEditModal onClose={() => (pascEditing = false)} record={MOCK_PASC_RECORD} />
+				</div>
+			{/if}
+		{/if}
 	{:else if activeLoading || !userStatus}
 		<div class="flex items-center justify-center gap-2 py-2">
 			<LoadingSpinner size="small" />
@@ -1975,7 +2234,21 @@
 										{$_('tooltip_profile_id')}
 										{sanitizedUserId}
 									</div>
-									{#if !effectivelyRestricted && !activeError && activeStatus}
+									{#if activeTab === 'system-pasc'}
+										<!-- Same badge component as the other provider tabs, driven by
+										     the live PASC flag (or the referral while there is no
+										     record). Mock preview below until whoami reports
+										     system-pasc. -->
+										{@const headerBadge = pascHeaderBadge}
+										{#if headerBadge}
+											<div class="tooltip-status-badge {headerBadge.badgeClass}">
+												<span class="status-indicator"></span>
+												<span>
+													<CanvasText text={$_(headerBadge.textKey)} />
+												</span>
+											</div>
+										{/if}
+									{:else if !effectivelyRestricted && !activeError && activeStatus}
 										<div class="tooltip-status-badge {statusBadgeClass}">
 											<span class="status-indicator"></span>
 											<!-- Bare wrapper gives the flag canvas the same inline-formatting context as the category spans below cuz without it flex baseline-aligns the canvas inconsistently with the span-wrapped siblings -->

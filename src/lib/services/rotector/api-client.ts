@@ -9,6 +9,8 @@ import type {
 	MembershipVerificationChallenge,
 	OutfitSnapshotByIdResponse,
 	OutfitSnapshotByNameResponse,
+	PascFileDescriptor,
+	PascRecordUpsert,
 	QueueLimitsData,
 	QueueResult,
 	RequestOptions,
@@ -17,6 +19,7 @@ import type {
 	UserStatus
 } from '../../types/api';
 import type { ApiUsage } from '../../types/usage';
+import type { PascAccessLevel } from '../../data/pasc-mock';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { getAbortError } from '../../utils/abort';
 import { buildResponseError } from '../../utils/api/api-error';
@@ -222,6 +225,33 @@ class RotectorApiClient {
 	async fetchOutfitImages(imageUrls: string[]): Promise<Array<string | null>> {
 		return sendMessage<Array<string | null>>(API_ACTIONS.FETCH_OUTFIT_IMAGES, {
 			imageUrls
+		});
+	}
+
+	async getPascClearance(): Promise<PascAccessLevel> {
+		return sendMessage<PascAccessLevel>(API_ACTIONS.GET_PASC_CLEARANCE, {});
+	}
+
+	async upsertPascRecord(userId: string | number, record: PascRecordUpsert): Promise<UserStatus> {
+		return sendMessage<UserStatus>(API_ACTIONS.PASC_UPSERT_RECORD, {
+			userId,
+			record: record as unknown as Record<string, unknown>
+		});
+	}
+
+	async uploadPascFile(
+		userId: string | number,
+		filename: string,
+		bytes: ArrayBuffer,
+		contentType?: string,
+		access?: string
+	): Promise<PascFileDescriptor> {
+		return sendMessage<PascFileDescriptor>(API_ACTIONS.PASC_UPLOAD_FILE, {
+			userId,
+			filename,
+			bytes,
+			...(contentType !== undefined && { contentType }),
+			...(access !== undefined && { access })
 		});
 	}
 

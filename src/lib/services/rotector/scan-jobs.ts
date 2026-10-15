@@ -53,11 +53,12 @@ export type ScanProgressCallback = (pct: number, detail?: ScanProgressDetail) =>
 // Drop the provider's cropped readout logo at this path and `wxt prepare` will
 // pick it up as a valid PublicPath (until then the cast below stands in).
 const SCAN_PROVIDER_LOGO_OVERRIDES: Record<string, string> = {
+	'system-pasc': getAssetUrl('/assets/pasc-scan.png'),
 	'system-scsn': getAssetUrl('/assets/scsn-scan.png'),
 	'system-rab': getAssetUrl('/assets/rab-scan.png'),
 	'system-tase': getAssetUrl('/assets/tase-scan.png')
 };
-const PROVIDER_ORDER = ['system-scsn', 'system-rab', 'system-tase'];
+const PROVIDER_ORDER = ['system-scsn', 'system-rab', 'system-tase', 'system-pasc'];
 // Deterministic display order regardless of store ordering. Unknown ids sort
 // last so a future provider never jumps ahead of the known ones.
 function sortProviders<T extends { apiId: string }>(providers: T[]): T[] {
@@ -68,24 +69,37 @@ function sortProviders<T extends { apiId: string }>(providers: T[]): T[] {
 	return [...providers].toSorted((a, b) => orderOf(a.apiId) - orderOf(b.apiId));
 }
 
+// PASC always renders in the strip, whether or not whoami reports it: a
+// display-only entry that never enters the progress denominator.
+function withPascChip(providers: ScanProviderProgress[]): ScanProviderProgress[] {
+	if (providers.some((p) => p.apiId === 'system-pasc')) return providers;
+	return sortProviders([
+		...providers,
+		{
+			apiId: 'system-pasc',
+			apiName: 'PASC',
+			logoUrl: getAssetUrl('/assets/pasc-scan.png'),
+			fallbackLogoUrl: '',
+			resolved: 0
+		}
+	]);
+}
+
 // Zeroed readout for the friend-ID fetch phase (0→30%), so the provider strip
 // renders from the start instead of waiting for the first batch answer.
-// Returns undefined when no system provider is accessible (custom-only).
-function buildZeroedDetail(total: number): ScanProgressDetail | undefined {
+// Always includes the PASC chip, even with no system provider accessible.
+function buildZeroedDetail(total: number): ScanProgressDetail {
 	const systemApis = getEnabledCustomApis().filter(isSystemApi);
-	if (systemApis.length === 0) return undefined;
-	return {
-		total,
-		providers: sortProviders(
-			systemApis.map((api) => ({
-				apiId: api.id,
-				apiName: api.name,
-				logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[api.id] ?? api.landscapeImageDataUrl ?? '',
-				fallbackLogoUrl: api.landscapeImageDataUrl ?? '',
-				resolved: 0
-			}))
-		)
-	};
+	const providers = sortProviders(
+		systemApis.map((api) => ({
+			apiId: api.id,
+			apiName: api.name,
+			logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[api.id] ?? api.landscapeImageDataUrl ?? '',
+			fallbackLogoUrl: api.landscapeImageDataUrl ?? '',
+			resolved: 0
+		}))
+	);
+	return { total, providers: withPascChip(providers) };
 }
 
 function flagToCategory(flagType: number): ScanCategory {
@@ -232,13 +246,15 @@ export async function scanFriendsForUser(
 					(resolvedSum / (total * providers.length)) * SCAN_PHASE_CHECK_RANGE;
 				const detail: ScanProgressDetail = {
 					total,
-					providers: sortProviders(providers).map((p) => ({
-						apiId: p.apiId,
-						apiName: p.apiName,
-						logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
-						fallbackLogoUrl: p.logoUrl,
-						resolved: p.resolved
-					}))
+					providers: withPascChip(
+						sortProviders(providers).map((p) => ({
+							apiId: p.apiId,
+							apiName: p.apiName,
+							logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
+							fallbackLogoUrl: p.logoUrl,
+							resolved: p.resolved
+						}))
+					)
 				};
 				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), detail);
 			}

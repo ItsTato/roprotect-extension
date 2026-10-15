@@ -76,7 +76,11 @@ export const API_CONFIG = {
 		TASE_V2_USER_CHECK: '/v1/tase/v2/lookup/user',
 		TASE_V2_BATCH_CHECK: '/v1/tase/v2/lookup/users',
 		// Discord avatar endpoint
-		DISCORD_AVATAR_BATCH: '/v1/discord/v1/get_user_avatar_link'
+		DISCORD_AVATAR_BATCH: '/v1/discord/v1/get_user_avatar_link',
+		// Viewer PASC clearance (proxied; see endpoints/pasc.ts)
+		PASC_CLEARANCE: '/v1/pasc/v1/clearance',
+		// PASC record + file routes (proxied; user id appended by the caller)
+		PASC_RECORD: '/v1/pasc/v1/record/user'
 	},
 	BATCH_SIZE: 100,
 	BATCH_DELAY: 250,
@@ -115,7 +119,10 @@ export const API_ACTIONS = {
 	HAS_TRANSLATE_PERMISSION: 'hasTranslatePermission',
 	REQUEST_TRANSLATE_PERMISSION: 'requestTranslatePermission',
 	API_WHOAMI: 'apiWhoami',
-	GET_DISCORD_AVATARS: 'getDiscordAvatars'
+	GET_DISCORD_AVATARS: 'getDiscordAvatars',
+	GET_PASC_CLEARANCE: 'getPascClearance',
+	PASC_UPSERT_RECORD: 'pascUpsertRecord',
+	PASC_UPLOAD_FILE: 'pascUploadFile'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {

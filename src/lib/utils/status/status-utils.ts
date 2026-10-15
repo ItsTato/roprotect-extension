@@ -120,8 +120,8 @@ export function getFlaggingResult<T extends UserStatus | GroupStatus>(
 ): CustomApiResult<T> | undefined {
 	if (!status) return undefined;
 
-	// System APIs have priority in order: scsn > rab > tase
-	const systemOrder = ['system-scsn', 'system-rab', 'system-tase'];
+	// System APIs have priority in order: pasc > scsn > rab > tase
+	const systemOrder = ['system-pasc', 'system-scsn', 'system-rab', 'system-tase'];
 
 	for (const id of systemOrder) {
 		const result = status.get(id);
@@ -191,9 +191,29 @@ export function pickCustomApiFallback<T extends UserStatus | GroupStatus>(
 
 // The system providers, most trusted first. Only used to break ties between equally severe
 // verdicts, never to let a milder provider outrank a more severe one.
-const SYSTEM_API_ORDER = ['system-scsn', 'system-rab', 'system-tase'] as const;
+const SYSTEM_API_ORDER = ['system-pasc', 'system-scsn', 'system-rab', 'system-tase'] as const;
 
 type SystemApiId = (typeof SYSTEM_API_ORDER)[number];
+
+// The badge text the proxy attaches when the user has no PASC record at all.
+// A miss carries no verdict and triggers no override — the PASC tab renders
+// the referral instead. Matched exactly: a flag-only (gated) record carries
+// no badges, so only this marker separates "details denied" from "no record".
+export const PASC_MISSING_BADGE = 'PASC - Not in database';
+
+// True when the system-pasc result carries a real record (full or flag-only).
+// Misses (the marker badge above), errors, and still-loading results are not
+// records and must never override the automatic verdicts.
+export function isPascRecordPresent<T extends UserStatus | GroupStatus>(
+	result: CustomApiResult<T> | undefined | null
+): boolean {
+	const data = result?.data;
+	if (!data) return false;
+	// GroupStatus carries no badges field at all; a badge-less UserStatus
+	// (flag-only record) is still a record — only the marker badge is a miss.
+	const badges = 'badges' in data && Array.isArray(data.badges) ? data.badges : [];
+	return !badges.some((badge) => badge.text === PASC_MISSING_BADGE);
+}
 
 // The system provider whose verdict should stand for the user as a whole, as [apiId, result].
 //
@@ -203,10 +223,23 @@ type SystemApiId = (typeof SYSTEM_API_ORDER)[number];
 // provider wins outright and the most severe one wins among several. When nothing is
 // actionable the order above decides, which keeps non-flagged states such as QUEUED or
 // PROVISIONAL intact.
+//
+// PASC sits above all of that: a present PASC record replaces the computed verdict
+// outright (even a downgrade to SAFE), so it is checked first. Absent, errored, or
+// still-loading PASC results fall through to the automatic verdicts.
 export function pickHighestSeveritySystemResult<T extends UserStatus | GroupStatus>(
 	combined: CombinedStatus<T> | null | undefined
 ): [string, CustomApiResult<T>] | undefined {
 	if (!combined) return undefined;
+
+	// PASC verdict override: a present PASC record (full or flag-only) replaces
+	// the computed verdict outright — even when it is lower than (or contradicts)
+	// the automatic providers, including downgrades to SAFE. Misses, errors, and
+	// pending results fall through to the automatic verdicts below.
+	const pasc = combined.get('system-pasc');
+	if (pasc && isPascRecordPresent(pasc)) {
+		return ['system-pasc', pasc];
+	}
 
 	let best: [string, CustomApiResult<T>] | undefined;
 	let bestRank = ACTIONABLE_FLAG_SEVERITY.length;
