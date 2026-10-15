@@ -2,6 +2,32 @@ import type { Changelog } from '@/lib/types/changelog';
 
 export const CHANGELOGS: Changelog[] = [
 	{
+		id: 'v2.22.0',
+		version: '2.22.0',
+		date: '2026-10-14',
+		title: 'PASC provider: human-reviewed verdicts with override',
+		summary:
+			'A new PASC provider tab shows human-reviewed case files whose verdicts override the automatic providers. Case details stay gated by clearance, and reviewers can create and edit records without leaving the tooltip.',
+		changes: [
+			{
+				type: 'added',
+				description: 'PASC provider tab with human-reviewed case files and verdict override'
+			},
+			{
+				type: 'added',
+				description: 'Record creation and editing from the tooltip for M1+ reviewers'
+			},
+			{
+				type: 'added',
+				description: 'Case-file attachments with per-file visibility levels'
+			},
+			{
+				type: 'changed',
+				description: 'Scan totals and indicators follow the PASC verdict when one exists'
+			}
+		]
+	},
+	{
 		id: 'v2.21.0',
 		version: '2.21.0',
 		date: '2026-10-01',
