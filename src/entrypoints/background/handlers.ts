@@ -163,7 +163,7 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			);
 		}
 		case API_ACTIONS.PASC_UPLOAD_FILE: {
-			return uploadPascFile(msg.userId, msg.filename, msg.bytes, msg.contentType, msg.access);
+			return uploadPascFile(msg.userId, msg.filename, msg.bytesBase64, msg.contentType, msg.access);
 		}
 	}
 }

@@ -173,7 +173,10 @@ const ContentMessageSchema = v.variant('action', [
 		filename: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 		contentType: v.optional(v.string()),
 		access: v.optional(v.picklist(['0', 'A1', 'A2', 'M1', 'M2'])),
-		bytes: v.instance(ArrayBuffer),
+		// Base64, not ArrayBuffer: extension messaging JSON-serializes the
+		// payload, so an ArrayBuffer arrives as a plain Object and fails
+		// `v.instance(ArrayBuffer)`. The sender encodes, background decodes.
+		bytesBase64: v.pipe(v.string(), v.minLength(1)),
 		clientId: ClientId
 	})
 ]);

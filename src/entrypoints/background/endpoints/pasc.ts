@@ -84,7 +84,7 @@ export async function upsertPascRecord(
 export async function uploadPascFile(
 	userId: string | number,
 	filename: string,
-	bytes: ArrayBuffer,
+	bytesBase64: string,
 	contentType: string | undefined,
 	access: string | undefined
 ): Promise<PascFileDescriptor> {
@@ -92,6 +92,12 @@ export async function uploadPascFile(
 	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
 	const apiKey = storedApiKey.trim();
 	if (!apiKey) throw new Error('No API key configured');
+
+	const binary = atob(bytesBase64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
 
 	const form = new FormData();
 	form.append(

@@ -27,6 +27,19 @@ import { getLoggedInUserId } from '../../utils/client-id';
 import { get } from 'svelte/store';
 import { logger } from '../../utils/logging/logger';
 
+// Extension messaging JSON-serializes payloads, which mangles ArrayBuffers
+// into plain objects. File bytes therefore cross as base64 (chunked to avoid
+// spread/apply stack limits on large files) and the background decodes them.
+function encodeArrayBufferBase64(bytes: ArrayBuffer): string {
+	let binary = '';
+	const chunk = new Uint8Array(bytes);
+	const CHUNK_SIZE = 32_768;
+	for (let i = 0; i < chunk.length; i += CHUNK_SIZE) {
+		binary += String.fromCharCode(...chunk.subarray(i, i + CHUNK_SIZE));
+	}
+	return btoa(binary);
+}
+
 // The background HTTP layer owns retries + Retry-After + safe-method gating
 // Stacking retries here on top of that produced MAX_RETRIES² fetches per failure
 async function sendMessage<T>(
@@ -249,7 +262,7 @@ class RotectorApiClient {
 		return sendMessage<PascFileDescriptor>(API_ACTIONS.PASC_UPLOAD_FILE, {
 			userId,
 			filename,
-			bytes,
+			bytesBase64: encodeArrayBufferBase64(bytes),
 			...(contentType !== undefined && { contentType }),
 			...(access !== undefined && { access })
 		});
