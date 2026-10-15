@@ -111,8 +111,8 @@
 				<span class="usage-metric-label">{$_('usage_avg_latency')}</span>
 			</div>
 			<div class="usage-metric">
-				<span class="usage-metric-value" title={formatNumber(usage.recentUserCount)}>
-					{formatCompact(usage.recentUserCount)}
+				<span class="usage-metric-value" title={formatNumber(usage.totalUserLookups)}>
+					{formatCompact(usage.totalUserLookups)}
 				</span>
 				<span class="usage-metric-label">{$_('usage_users_scanned')}</span>
 			</div>

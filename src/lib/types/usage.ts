@@ -25,7 +25,7 @@ export interface ApiUsage {
 	avgLatencyMs: number;
 	outcomes: UsageOutcomeCount[];
 	services: UsageServiceTotals[];
-	recentUserCount: number;
+	totalUserLookups: number;
 	firstSeen: number | null;
 	lastSeen: number | null;
 	updatedAt: number;

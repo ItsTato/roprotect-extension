@@ -6,7 +6,7 @@ import { getStorage } from '@/lib/utils/storage';
 import { logger } from '@/lib/utils/logging/logger';
 import { makeHttpRequest } from '../http-client';
 
-const SERVICE_ORDER = ['scsn', 'rab', 'tase'] as const;
+const SERVICE_ORDER = ['scsn', 'rab', 'tase', 'pasc'] as const;
 
 function emptyUsage(hasApiKey: boolean): ApiUsage {
 	return {
@@ -17,7 +17,7 @@ function emptyUsage(hasApiKey: boolean): ApiUsage {
 		avgLatencyMs: 0,
 		outcomes: [],
 		services: [],
-		recentUserCount: 0,
+		totalUserLookups: 0,
 		firstSeen: null,
 		lastSeen: null,
 		updatedAt: 0,
@@ -98,8 +98,10 @@ export async function getApiUsage(): Promise<ApiUsage> {
 			avgLatencyMs: entry.avgLatencyMs,
 			outcomes,
 			services,
-			// Only the count is surfaced; the ids stay in the background.
-			recentUserCount: entry.recentUserIds.length,
+			// Lifetime counter when the backend reports it; otherwise the
+			// recent-ids count. Only the count is surfaced; the ids stay
+			// in the background.
+			totalUserLookups: entry.totalUserLookups ?? entry.recentUserIds.length,
 			firstSeen: entry.firstSeen,
 			lastSeen: entry.lastSeen,
 			updatedAt: response.updatedAt,
