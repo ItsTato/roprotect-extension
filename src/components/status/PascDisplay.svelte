@@ -4,6 +4,7 @@
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
 	import TaseV2Display from './TaseV2Display.svelte';
+	import PascReviewModal from './PascReviewModal.svelte';
 	import type { DiscordAvatar, TaseUserRecord } from '@/lib/schemas/custom-api';
 	import { apiClient } from '@/lib/services/rotector/api-client';
 	import { renderMarkdown } from '@/lib/utils/markdown';
@@ -107,13 +108,11 @@
 	let fileActionError = $state<string | null>(null);
 
 	// Moderator review request state. Report (no record, 0+) and recheck
-	// (record exists, A1+) are mutually exclusive by branch. The proxy posts
-	// to Discord server-side and enforces the clearance gates again.
-	let requestingReview = $state(false);
+	// (record exists, A1+) are mutually exclusive by branch. The request goes
+	// through PascReviewModal; the proxy posts to Discord server-side and
+	// enforces the clearance gates again.
+	let reviewModal = $state<'report' | 'recheck' | null>(null);
 	let reviewDone = $state<'report' | 'recheck' | null>(null);
-	let reviewError = $state<string | null>(null);
-	let reviewForm = $state<'report' | 'recheck' | null>(null);
-	let reviewComment = $state('');
 
 	const canRecheck = $derived(pascCanSee(viewerLevel, 'A1'));
 
@@ -129,11 +128,8 @@
 	$effect(() => {
 		// Reset per-user so a sent state never carries to the next tooltip.
 		void userId;
-		requestingReview = false;
+		reviewModal = null;
 		reviewDone = null;
-		reviewError = null;
-		reviewForm = null;
-		reviewComment = '';
 		if (!record) return;
 		confirmingDeleteId = null;
 		void renderMarkdown(record.internalReview).then((html) => {
@@ -275,83 +271,56 @@
 		}));
 	}
 
-	async function sendReviewRequest(kind: 'report' | 'recheck') {
-		if (requestingReview || reviewDone) return;
-		requestingReview = true;
-		reviewError = null;
-		try {
-			const comment = reviewComment.trim();
-			if (kind === 'recheck' && record) {
-				await apiClient.requestPascReview(userId, kind, {
+	// Context for the review modal: everything the tab knows, so the Discord
+	// message carries as much information as possible.
+	function buildReviewContext(kind: 'report' | 'recheck'): {
+		targetLabel: string;
+		context: {
+			displayName: string;
+			username: string;
+			flag: string;
+			referralProvider: string;
+			referralFlag: string;
+			verdicts: { provider: string; flag: string; detail: string }[];
+		};
+	} {
+		if (kind === 'recheck' && record) {
+			return {
+				targetLabel: `${record.displayName} — PASC flag: ${PASC_FLAG_LABELS[record.flag]}`,
+				context: {
 					displayName: record.displayName,
 					username: record.username,
 					flag: PASC_FLAG_LABELS[record.flag],
-					verdicts: reviewVerdicts(record.providerVerdicts),
-					comment
-				});
-			} else {
-				const source = draftRecord;
-				await apiClient.requestPascReview(userId, kind, {
-					displayName: source?.displayName ?? displayName ?? '',
-					username: source?.username ?? username ?? '',
-					referralProvider: referral?.provider ?? '',
-					referralFlag: referral ? PASC_FLAG_LABELS[referral.flag] : '',
-					verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? []),
-					comment
-				});
-			}
-			reviewDone = kind;
-			reviewForm = null;
-			reviewComment = '';
-		} catch (error) {
-			reviewError = error instanceof Error ? error.message : String(error);
-		} finally {
-			requestingReview = false;
+					referralProvider: '',
+					referralFlag: '',
+					verdicts: reviewVerdicts(record.providerVerdicts)
+				}
+			};
 		}
+		const source = draftRecord;
+		const referralText = referral
+			? `Referred to ${referral.provider} (${PASC_FLAG_LABELS[referral.flag]})`
+			: 'No PASC case file';
+		return {
+			targetLabel: `${source?.displayName ?? displayName ?? userId} — ${referralText}`,
+			context: {
+				displayName: source?.displayName ?? displayName ?? '',
+				username: source?.username ?? username ?? '',
+				flag: '',
+				referralProvider: referral?.provider ?? '',
+				referralFlag: referral ? PASC_FLAG_LABELS[referral.flag] : '',
+				verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? [])
+			}
+		};
 	}
 
-	function toggleReviewForm(kind: 'report' | 'recheck') {
-		if (reviewDone) return;
-		reviewError = null;
-		if (reviewForm === kind) {
-			reviewForm = null;
-			return;
-		}
-		reviewForm = kind;
-		reviewComment = '';
+	function handleReviewSent(kind: 'report' | 'recheck') {
+		reviewDone = kind;
+		reviewModal = null;
 	}
 </script>
 
 <div class="pasc-container">
-	{#snippet reviewFormSnippet(kind: 'report' | 'recheck')}
-		{#if reviewForm === kind && reviewDone === null}
-			<div class="pasc-review-form">
-				<input
-					class="pasc-review-input"
-					aria-label={kind === 'report' ? 'Report note' : 'Recheck note'}
-					maxlength={280}
-					placeholder={kind === 'report'
-						? 'Why are you reporting this user? (optional)'
-						: 'What should moderators re-examine? (optional)'}
-					type="text"
-					bind:value={reviewComment}
-				/>
-				<div class="pasc-field-row">
-					<button
-						class="pasc-edit-button"
-						disabled={requestingReview}
-						onclick={() => void sendReviewRequest(kind)}
-						type="button"
-					>
-						{requestingReview ? 'Sending…' : 'Send'}
-					</button>
-					<button class="pasc-edit-button" onclick={() => (reviewForm = null)} type="button">
-						Cancel
-					</button>
-				</div>
-			</div>
-		{/if}
-	{/snippet}
 	{#if record}
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
@@ -374,8 +343,7 @@
 			{#if requestsEnabled && canRecheck}
 				<button
 					class="pasc-edit-button"
-					disabled={requestingReview}
-					onclick={() => toggleReviewForm('recheck')}
+					onclick={() => (reviewModal = 'recheck')}
 					title="Ask a PASC moderator to re-examine this case file"
 					type="button"
 				>
@@ -383,10 +351,6 @@
 				</button>
 			{/if}
 		</div>
-		{#if reviewError}
-			<p class="pasc-meta">{reviewError}</p>
-		{/if}
-		{@render reviewFormSnippet('recheck')}
 
 		<!-- The PASC flag is public to every clearance (0+) and overrides the other
 		     providers — always rendered, never gated on `visible` (see T:\Python Projects\TLET\PASC\PASC.md). -->
@@ -540,8 +504,7 @@
 			{#if requestsEnabled}
 				<button
 					class="pasc-edit-button"
-					disabled={requestingReview}
-					onclick={() => toggleReviewForm('report')}
+					onclick={() => (reviewModal = 'report')}
 					title="Report this user to PASC moderators for review"
 					type="button"
 				>
@@ -549,10 +512,6 @@
 				</button>
 			{/if}
 		</div>
-		{#if reviewError}
-			<p class="pasc-meta">{reviewError}</p>
-		{/if}
-		{@render reviewFormSnippet('report')}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon
@@ -601,8 +560,7 @@
 				<button
 					style:margin-inline-start="auto"
 					class="pasc-edit-button"
-					disabled={requestingReview}
-					onclick={() => toggleReviewForm('report')}
+					onclick={() => (reviewModal = 'report')}
 					title="Report this user to PASC moderators for review"
 					type="button"
 				>
@@ -610,10 +568,6 @@
 				</button>
 			{/if}
 		</div>
-		{#if reviewError}
-			<p class="pasc-meta">{reviewError}</p>
-		{/if}
-		{@render reviewFormSnippet('report')}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon
@@ -630,5 +584,28 @@
 		{:else}
 			<p class="pasc-meta">No PASC case file for this user.</p>
 		{/if}
+	{/if}
+	{#if reviewModal}
+		{@const review = buildReviewContext(reviewModal)}
+		<div
+			class="modal-overlay visible"
+			aria-label={reviewModal === 'report' ? 'Report user' : 'Ask for Recheck'}
+			aria-modal="true"
+			onclick={(event) => event.stopPropagation()}
+			onkeydown={(event) => {
+				if (event.key === 'Escape') reviewModal = null;
+			}}
+			role="dialog"
+			tabindex="-1"
+		>
+			<PascReviewModal
+				context={review.context}
+				kind={reviewModal}
+				onClose={() => (reviewModal = null)}
+				onSent={handleReviewSent}
+				targetLabel={review.targetLabel}
+				{userId}
+			/>
+		</div>
 	{/if}
 </div>

@@ -179,17 +179,6 @@
 	border-color: var(--color-border-subtle);
 }
 
-@utility pasc-review-form {
-	@apply flex flex-col gap-1.5;
-}
-
-@utility pasc-review-input {
-	@apply rounded-md border px-2 py-1 text-[12px]! inline-full;
-	border-color: var(--color-border);
-	background-color: var(--color-bg);
-	color: var(--color-text);
-}
-
 @utility pasc-markdown {
 	@apply flex flex-col gap-1.5 text-[12px]!;
 
