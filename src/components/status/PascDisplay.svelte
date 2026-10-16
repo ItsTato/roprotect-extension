@@ -361,7 +361,7 @@
 		</div>
 
 		{#if visible}
-			<div class="pasc-columns">
+			<div class="pasc-columns" class:pasc-columns-single={discordAccounts.length === 0}>
 				<div>
 					<h4 class="pasc-column-title">Provider verdicts</h4>
 					<div class="pasc-container">
@@ -523,7 +523,7 @@
 				<span class="pasc-provider-detail">{PASC_FLAG_LABELS[referral.flag]}</span>
 			</div>
 		{/if}
-		<div class="pasc-columns">
+		<div class="pasc-columns" class:pasc-columns-single={discordAccounts.length === 0}>
 			<div>
 				<h4 class="pasc-column-title">Provider verdicts</h4>
 				<div class="pasc-container">

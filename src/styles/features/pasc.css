@@ -26,6 +26,10 @@
 	grid-template-columns: 1fr 1fr;
 }
 
+@utility pasc-columns-single {
+	grid-template-columns: 1fr;
+}
+
 @utility pasc-column-title {
 	@apply m-0 text-[12px]! font-semibold! tracking-wide uppercase;
 	color: var(--color-text-subtle);
