@@ -300,6 +300,32 @@ class RotectorApiClient {
 		});
 	}
 
+	async requestPascReview(
+		userId: string | number,
+		kind: 'report' | 'recheck',
+		context: {
+			displayName?: string;
+			username?: string;
+			flag?: string;
+			referralProvider?: string;
+			referralFlag?: string;
+			verdicts?: Array<{ provider: string; flag: string; detail: string }>;
+		} = {}
+	): Promise<{ requested: string; user_id: number }> {
+		return sendMessage<{ requested: string; user_id: number }>(API_ACTIONS.PASC_REQUEST_REVIEW, {
+			userId,
+			kind,
+			...(context.displayName !== undefined && { displayName: context.displayName }),
+			...(context.username !== undefined && { username: context.username }),
+			...(context.flag !== undefined && { flag: context.flag }),
+			...(context.referralProvider !== undefined && {
+				referralProvider: context.referralProvider
+			}),
+			...(context.referralFlag !== undefined && { referralFlag: context.referralFlag }),
+			...(context.verdicts !== undefined && { verdicts: context.verdicts })
+		});
+	}
+
 	async whoami(apiKey: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
 		logger.debug('[apiClient] whoami called', {
 			apiKeyPrefix: `${apiKey.slice(0, 8)}...`,

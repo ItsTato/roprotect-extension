@@ -40,6 +40,7 @@
 	discordAccounts={MOCK_PASC_DISCORD_ACCOUNTS}
 	onEdit={() => (editing = true)}
 	record={MOCK_PASC_RECORD}
+	userId={MOCK_PASC_RECORD.userId}
 	{viewerLevel}
 />
 
@@ -53,6 +54,7 @@
 	discordAccounts={MOCK_PASC_DISCORD_ACCOUNTS}
 	onEdit={() => (editing = true)}
 	record={MOCK_PASC_RESTRICTED_RECORD}
+	userId={MOCK_PASC_RESTRICTED_RECORD.userId}
 	{viewerLevel}
 />
 
@@ -66,6 +68,7 @@
 	onEdit={() => (editing = true)}
 	record={null}
 	referral={mockReferral}
+	userId={MOCK_PASC_RECORD.userId}
 	{viewerLevel}
 />
 

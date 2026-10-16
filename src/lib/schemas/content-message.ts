@@ -190,6 +190,26 @@ const ContentMessageSchema = v.variant('action', [
 		userId: UserId,
 		fileId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_REQUEST_REVIEW),
+		userId: UserId,
+		kind: v.picklist(['report', 'recheck']),
+		displayName: v.optional(v.pipe(v.string(), v.maxLength(128))),
+		username: v.optional(v.pipe(v.string(), v.maxLength(128))),
+		flag: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		referralProvider: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		referralFlag: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		verdicts: v.optional(
+			v.array(
+				v.object({
+					provider: v.pipe(v.string(), v.maxLength(32)),
+					flag: v.pipe(v.string(), v.maxLength(32)),
+					detail: v.pipe(v.string(), v.maxLength(256))
+				})
+			)
+		),
+		clientId: ClientId
 	})
 ]);
 

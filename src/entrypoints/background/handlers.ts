@@ -29,6 +29,7 @@ import {
 	deletePascFile,
 	downloadPascFile,
 	getPascClearance,
+	requestPascReview,
 	uploadPascFile,
 	upsertPascRecord
 } from './endpoints/pasc';
@@ -176,6 +177,21 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		}
 		case API_ACTIONS.PASC_DELETE_FILE: {
 			return deletePascFile(msg.userId, msg.fileId);
+		}
+		case API_ACTIONS.PASC_REQUEST_REVIEW: {
+			return requestPascReview(
+				msg.userId,
+				msg.kind,
+				{
+					displayName: msg.displayName,
+					username: msg.username,
+					flag: msg.flag,
+					referralProvider: msg.referralProvider,
+					referralFlag: msg.referralFlag,
+					verdicts: msg.verdicts
+				},
+				msg.clientId ?? undefined
+			);
 		}
 	}
 }

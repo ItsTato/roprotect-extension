@@ -1563,6 +1563,8 @@
 					onEdit={() => (pascEditing = true)}
 					onRefresh={refreshPasc}
 					record={pascDisplayRecord}
+					requestsEnabled
+					userId={sanitizedUserId}
 					viewerLevel={$pascClearanceLevel}
 				/>
 				{#if pascEditing && pascDisplayRecord.accessLevel !== null}
@@ -1590,10 +1592,15 @@
 				<PascDisplay
 					canEdit={$pascCanEdit}
 					discordAccounts={pascDiscordAccounts}
+					displayName={userDisplayName ?? userInfo?.displayName}
 					draftRecord={pascDraft}
 					onEdit={() => (pascEditing = true)}
+					providerVerdicts={liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)}
 					record={null}
 					referral={pascReferral}
+					requestsEnabled
+					userId={sanitizedUserId}
+					username={userUsername ?? userInfo?.username}
 					viewerLevel={$pascClearanceLevel}
 				/>
 				{#if pascEditing && pascDraft}
@@ -1627,6 +1634,7 @@
 				discordAccounts={MOCK_PASC_DISCORD_ACCOUNTS}
 				onEdit={() => (pascEditing = true)}
 				record={MOCK_PASC_RECORD}
+				userId={MOCK_PASC_RECORD.userId}
 				viewerLevel={pascViewerLevel}
 			/>
 			{#if pascEditing}

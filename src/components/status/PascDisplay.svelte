@@ -16,6 +16,7 @@
 		type PascCaseFile,
 		type PascDiscordAccount,
 		type PascFlag,
+		type PascProviderVerdict,
 		type PascRecord,
 		type PascReferral
 	} from '@/lib/data/pasc-mock';
@@ -37,6 +38,13 @@
 		draftRecord?: PascRecord | null;
 		onEdit?: () => void;
 		onRefresh?: (() => void) | undefined;
+		// Moderator review requests (Report / Ask for Recheck). The caller owns
+		// the user id and the live-only gate: mock previews never send.
+		userId: string;
+		requestsEnabled?: boolean;
+		displayName?: string | undefined;
+		username?: string | undefined;
+		providerVerdicts?: PascProviderVerdict[] | undefined;
 	}
 
 	let {
@@ -47,7 +55,12 @@
 		referral = null,
 		draftRecord = null,
 		onEdit,
-		onRefresh
+		onRefresh,
+		userId,
+		requestsEnabled = false,
+		displayName = undefined,
+		username = undefined,
+		providerVerdicts = undefined
 	}: Props = $props();
 
 	const pascLogo = getAssetUrl('/assets/pasc-scan.png');
@@ -93,6 +106,15 @@
 	let deletingFile = $state(false);
 	let fileActionError = $state<string | null>(null);
 
+	// Moderator review request state. Report (no record, 0+) and recheck
+	// (record exists, A1+) are mutually exclusive by branch. The proxy posts
+	// to Discord server-side and enforces the clearance gates again.
+	let requestingReview = $state(false);
+	let reviewDone = $state<'report' | 'recheck' | null>(null);
+	let reviewError = $state<string | null>(null);
+
+	const canRecheck = $derived(pascCanSee(viewerLevel, 'A1'));
+
 	// Non-reactive: object URLs are revoked on selection/record change without
 	// subscribing the download effect (reading the state copy there would loop).
 	let lastObjectUrl: string | null = null;
@@ -103,6 +125,11 @@
 	);
 
 	$effect(() => {
+		// Reset per-user so a sent state never carries to the next tooltip.
+		void userId;
+		requestingReview = false;
+		reviewDone = null;
+		reviewError = null;
 		if (!record) return;
 		confirmingDeleteId = null;
 		void renderMarkdown(record.internalReview).then((html) => {
@@ -233,6 +260,46 @@
 				])
 			)
 	);
+
+	function reviewVerdicts(
+		verdicts: PascProviderVerdict[]
+	): { provider: string; flag: string; detail: string }[] {
+		return verdicts.map((verdict) => ({
+			provider: verdict.provider,
+			flag: PASC_FLAG_LABELS[verdict.flag],
+			detail: verdict.detail
+		}));
+	}
+
+	async function sendReviewRequest(kind: 'report' | 'recheck') {
+		if (requestingReview || reviewDone) return;
+		requestingReview = true;
+		reviewError = null;
+		try {
+			if (kind === 'recheck' && record) {
+				await apiClient.requestPascReview(userId, kind, {
+					displayName: record.displayName,
+					username: record.username,
+					flag: PASC_FLAG_LABELS[record.flag],
+					verdicts: reviewVerdicts(record.providerVerdicts)
+				});
+			} else {
+				const source = draftRecord;
+				await apiClient.requestPascReview(userId, kind, {
+					displayName: source?.displayName ?? displayName ?? '',
+					username: source?.username ?? username ?? '',
+					referralProvider: referral?.provider ?? '',
+					referralFlag: referral ? PASC_FLAG_LABELS[referral.flag] : '',
+					verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? [])
+				});
+			}
+			reviewDone = kind;
+		} catch (error) {
+			reviewError = error instanceof Error ? error.message : String(error);
+		} finally {
+			requestingReview = false;
+		}
+	}
 </script>
 
 <div class="pasc-container">
@@ -255,7 +322,25 @@
 					Edit record
 				</button>
 			{/if}
+			{#if requestsEnabled && canRecheck}
+				<button
+					class="pasc-edit-button"
+					disabled={requestingReview || reviewDone !== null}
+					onclick={() => void sendReviewRequest('recheck')}
+					title="Ask a PASC moderator to re-examine this case file"
+					type="button"
+				>
+					{reviewDone === 'recheck'
+						? 'Recheck requested'
+						: requestingReview
+							? 'Sending…'
+							: 'Ask for Recheck'}
+				</button>
+			{/if}
 		</div>
+		{#if reviewError}
+			<p class="pasc-meta">{reviewError}</p>
+		{/if}
 
 		<!-- The PASC flag is public to every clearance (0+) and overrides the other
 		     providers — always rendered, never gated on `visible` (see T:\Python Projects\TLET\PASC\PASC.md). -->
@@ -406,7 +491,21 @@
 					Create record
 				</button>
 			{/if}
+			{#if requestsEnabled}
+				<button
+					class="pasc-edit-button"
+					disabled={requestingReview || reviewDone !== null}
+					onclick={() => void sendReviewRequest('report')}
+					title="Report this user to PASC moderators for review"
+					type="button"
+				>
+					{reviewDone === 'report' ? 'Report sent' : requestingReview ? 'Sending…' : 'Report'}
+				</button>
+			{/if}
 		</div>
+		{#if reviewError}
+			<p class="pasc-meta">{reviewError}</p>
+		{/if}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon
@@ -451,7 +550,22 @@
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
 			<span class="pasc-access-chip">No record</span>
+			{#if requestsEnabled}
+				<button
+					style:margin-inline-start="auto"
+					class="pasc-edit-button"
+					disabled={requestingReview || reviewDone !== null}
+					onclick={() => void sendReviewRequest('report')}
+					title="Report this user to PASC moderators for review"
+					type="button"
+				>
+					{reviewDone === 'report' ? 'Report sent' : requestingReview ? 'Sending…' : 'Report'}
+				</button>
+			{/if}
 		</div>
+		{#if reviewError}
+			<p class="pasc-meta">{reviewError}</p>
+		{/if}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon

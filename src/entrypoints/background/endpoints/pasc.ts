@@ -221,3 +221,58 @@ export async function deletePascFile(
 		deleted: typeof payload.data?.deleted === 'string' ? payload.data.deleted : fileId
 	};
 }
+
+export interface PascReviewContext {
+	displayName?: string | undefined;
+	username?: string | undefined;
+	flag?: string | undefined;
+	referralProvider?: string | undefined;
+	referralFlag?: string | undefined;
+	verdicts?: Array<{ provider: string; flag: string; detail: string }> | undefined;
+}
+
+// Moderator review request (report / recheck). The proxy posts to Discord
+// server-side, so the webhook URL never reaches the extension. Clearance
+// gates (0+ for reports, A1+ for rechecks) are enforced proxy-side.
+export async function requestPascReview(
+	userId: string | number,
+	kind: 'report' | 'recheck',
+	context: PascReviewContext,
+	clientId?: string
+): Promise<{ requested: string; user_id: number }> {
+	const sanitizedUserId = validateEntityId(userId);
+	return makeHttpRequest(API_CONFIG.ENDPOINTS.PASC_REVIEW_REQUESTS, {
+		method: 'POST',
+		body: JSON.stringify({
+			userId: sanitizedUserId,
+			kind,
+			displayName: context.displayName ?? '',
+			username: context.username ?? '',
+			flag: context.flag ?? '',
+			referralProvider: context.referralProvider ?? '',
+			referralFlag: context.referralFlag ?? '',
+			verdicts: context.verdicts ?? []
+		}),
+		clientId,
+		rawResponse: true,
+		parse: (payload) => {
+			const parsed = payload as {
+				success?: boolean;
+				data?: { requested?: unknown; user_id?: unknown };
+				error?: unknown;
+			};
+			const data = parsed.success ? parsed.data : undefined;
+			if (!data) {
+				throw new Error(
+					typeof parsed.error === 'string' && parsed.error
+						? parsed.error
+						: 'PASC review request failed'
+				);
+			}
+			if (typeof data.requested !== 'string' || typeof data.user_id !== 'number') {
+				throw new TypeError('PASC review request failed: unexpected response');
+			}
+			return { requested: data.requested, user_id: data.user_id };
+		}
+	});
+}

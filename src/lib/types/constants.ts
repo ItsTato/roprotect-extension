@@ -80,7 +80,9 @@ export const API_CONFIG = {
 		// Viewer PASC clearance (proxied; see endpoints/pasc.ts)
 		PASC_CLEARANCE: '/v1/pasc/v1/clearance',
 		// PASC record + file routes (proxied; user id appended by the caller)
-		PASC_RECORD: '/v1/pasc/v1/record/user'
+		PASC_RECORD: '/v1/pasc/v1/record/user',
+		// PASC moderator review requests (proxied; posts to Discord server-side)
+		PASC_REVIEW_REQUESTS: '/v1/pasc/v1/review-requests'
 	},
 	BATCH_SIZE: 100,
 	BATCH_DELAY: 250,
@@ -124,7 +126,8 @@ export const API_ACTIONS = {
 	PASC_UPSERT_RECORD: 'pascUpsertRecord',
 	PASC_UPLOAD_FILE: 'pascUploadFile',
 	PASC_DOWNLOAD_FILE: 'pascDownloadFile',
-	PASC_DELETE_FILE: 'pascDeleteFile'
+	PASC_DELETE_FILE: 'pascDeleteFile',
+	PASC_REQUEST_REVIEW: 'pascRequestReview'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {
