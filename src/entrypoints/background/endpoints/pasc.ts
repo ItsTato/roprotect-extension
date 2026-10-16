@@ -133,3 +133,91 @@ export async function uploadPascFile(
 		access: descriptor.access ?? access ?? null
 	};
 }
+
+export interface PascDownloadedFile {
+	bytesBase64: string;
+	contentType: string;
+	filename: string;
+}
+
+// Case-file download. Raw fetch through the background so the auth header
+// stays out of content scripts. Bytes cross messaging as base64 (see upload).
+export async function downloadPascFile(
+	userId: string | number,
+	fileId: string
+): Promise<PascDownloadedFile> {
+	const sanitizedUserId = validateEntityId(userId);
+	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
+	const apiKey = storedApiKey.trim();
+	if (!apiKey) throw new Error('No API key configured');
+
+	const response = await fetch(
+		`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PASC_RECORD}/${sanitizedUserId}/files/${encodeURIComponent(fileId)}`,
+		{ method: 'GET', headers: { 'X-Auth-Token': apiKey } }
+	);
+	if (!response.ok) {
+		let detail = `PASC file download failed (HTTP ${String(response.status)})`;
+		try {
+			const failure = (await response.json()) as { error?: unknown };
+			if (typeof failure.error === 'string' && failure.error) detail = failure.error;
+		} catch {
+			// Non-JSON failure body: keep the HTTP status detail.
+		}
+		throw new Error(detail);
+	}
+	const buffer = await response.arrayBuffer();
+	const view = new Uint8Array(buffer);
+	let binary = '';
+	for (let i = 0; i < view.length; i += 32_768) {
+		binary += String.fromCharCode(...view.subarray(i, i + 32_768));
+	}
+	const disposition = response.headers.get('Content-Disposition') ?? '';
+	return {
+		bytesBase64: btoa(binary),
+		contentType: response.headers.get('Content-Type') || 'application/octet-stream',
+		filename: filenameFromDisposition(disposition, fileId)
+	};
+}
+
+function filenameFromDisposition(disposition: string, fallback: string): string {
+	const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;\s]+)/.exec(disposition);
+	const raw = match?.[1] ?? match?.[2] ?? match?.[3];
+	if (!raw) return fallback;
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		return raw;
+	}
+}
+
+// Case-file delete (M1+ enforced proxy-side). Returns on success; throws on
+// missing file or refusal so the caller can surface the message.
+export async function deletePascFile(
+	userId: string | number,
+	fileId: string
+): Promise<{ deleted: string }> {
+	const sanitizedUserId = validateEntityId(userId);
+	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
+	const apiKey = storedApiKey.trim();
+	if (!apiKey) throw new Error('No API key configured');
+
+	const response = await fetch(
+		`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PASC_RECORD}/${sanitizedUserId}/files/${encodeURIComponent(fileId)}`,
+		{ method: 'DELETE', headers: { 'X-Auth-Token': apiKey } }
+	);
+	const payload = (await response.json()) as {
+		success?: boolean;
+		data?: { deleted?: unknown };
+		error?: unknown;
+	};
+	if (!response.ok || !payload.success) {
+		throw new Error(
+			typeof payload.error === 'string' && payload.error
+				? payload.error
+				: `PASC file delete failed (HTTP ${String(response.status)})`
+		);
+	}
+	return {
+		deleted: typeof payload.data?.deleted === 'string' ? payload.data.deleted : fileId
+	};
+}

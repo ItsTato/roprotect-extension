@@ -121,6 +121,9 @@ export interface PascCaseFile {
 	kind: 'markdown' | 'image' | 'other';
 	accessLevel: PascAccessLevel;
 	sizeLabel: string;
+	// Upstream PASC file id, forwarded by the proxy lookup adapter. Null for
+	// mock files and pre-file-id lookups: no download or delete without it.
+	fileId: string | null;
 	// Mock-only preview content until the backend serves file bytes.
 	mockPreview?: string | undefined;
 }
@@ -177,11 +180,26 @@ export const MOCK_PASC_RECORD: PascRecord = {
 			kind: 'markdown',
 			accessLevel: 'A2',
 			sizeLabel: '4 KB',
+			fileId: null,
 			mockPreview:
 				'## Case notes\n\n- Alt linkage confirmed via RoWifi.\n- Holding **UNSAFE** pending M2 sign-off.'
 		},
-		{ id: 'f2', name: 'screenshot-1.png', kind: 'image', accessLevel: 'M1', sizeLabel: '812 KB' },
-		{ id: 'f3', name: 'chatlog.txt', kind: 'other', accessLevel: 'A1', sizeLabel: '11 KB' }
+		{
+			id: 'f2',
+			name: 'screenshot-1.png',
+			kind: 'image',
+			accessLevel: 'M1',
+			sizeLabel: '812 KB',
+			fileId: null
+		},
+		{
+			id: 'f3',
+			name: 'chatlog.txt',
+			kind: 'other',
+			accessLevel: 'A1',
+			sizeLabel: '11 KB',
+			fileId: null
+		}
 	],
 	providerVerdicts: [
 		{ provider: 'SIGMANET', flag: 'safe', detail: 'No record — clean verdict' },

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Upload, X } from '@lucide/svelte';
+	import { Trash2, Upload, X } from '@lucide/svelte';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
 	import PascMarkdownEditor from './PascMarkdownEditor.svelte';
@@ -73,6 +73,9 @@
 	let saveError = $state<string | null>(null);
 	let uploading = $state(false);
 	let uploadError = $state<string | null>(null);
+	let confirmingDeleteId = $state<string | null>(null);
+	let deletingFile = $state(false);
+	let deleteError = $state<string | null>(null);
 	let newFileLevel = $state<PascAccessLevel>(
 		untrack(() => record.accessLevel ?? record.internalReviewMinLevel)
 	);
@@ -134,6 +137,7 @@
 					kind: pascFileKind(descriptor.name ?? file.name),
 					accessLevel: newFileLevel,
 					sizeLabel: formatSize(descriptor.size),
+					fileId: descriptor.fileId,
 					mockPreview: undefined
 				}
 			];
@@ -142,6 +146,29 @@
 			uploadError = error instanceof Error ? error.message : String(error);
 		} finally {
 			uploading = false;
+		}
+	}
+
+	// The modal only opens for M1+ viewers, so every delete button here is
+	// inherently clearance-gated. Stored files refresh from the lookup;
+	// just-uploaded extras splice out locally.
+	async function deleteModalFile(file: PascCaseFile, isExtra: boolean) {
+		if (!file.fileId || deletingFile) return;
+		if (confirmingDeleteId !== file.id) {
+			confirmingDeleteId = file.id;
+			return;
+		}
+		confirmingDeleteId = null;
+		deletingFile = true;
+		deleteError = null;
+		try {
+			await apiClient.deletePascFile(record.userId, file.fileId);
+			if (isExtra) extraFiles = extraFiles.filter((entry) => entry.id !== file.id);
+			onRefresh?.();
+		} catch (error) {
+			deleteError = error instanceof Error ? error.message : String(error);
+		} finally {
+			deletingFile = false;
 		}
 	}
 </script>
@@ -234,6 +261,21 @@
 							<option value={level}>{level}</option>
 						{/each}
 					</select>
+					{#if file.fileId}
+						<button
+							class="pasc-file-delete"
+							aria-label={confirmingDeleteId === file.id
+								? `Confirm delete ${file.name}`
+								: `Delete ${file.name}`}
+							disabled={deletingFile}
+							onclick={() => void deleteModalFile(file, false)}
+							title={confirmingDeleteId === file.id ? 'Click again to confirm' : 'Delete file'}
+							type="button"
+						>
+							<Trash2 size={12} />
+							{confirmingDeleteId === file.id ? 'Sure?' : 'Delete'}
+						</button>
+					{/if}
 				</div>
 			{/each}
 			{#each extraFiles as file (file.id)}
@@ -242,6 +284,21 @@
 					<span class="pasc-file-meta"
 						>{file.accessLevel}{file.sizeLabel ? ` · ${file.sizeLabel}` : ''}</span
 					>
+					{#if file.fileId}
+						<button
+							class="pasc-file-delete"
+							aria-label={confirmingDeleteId === file.id
+								? `Confirm delete ${file.name}`
+								: `Delete ${file.name}`}
+							disabled={deletingFile}
+							onclick={() => void deleteModalFile(file, true)}
+							title={confirmingDeleteId === file.id ? 'Click again to confirm' : 'Delete file'}
+							type="button"
+						>
+							<Trash2 size={12} />
+							{confirmingDeleteId === file.id ? 'Sure?' : 'Delete'}
+						</button>
+					{/if}
 				</div>
 			{/each}
 			<div class="pasc-field-row">
@@ -269,6 +326,9 @@
 			/>
 			{#if uploadError}
 				<p class="pasc-meta">{uploadError}</p>
+			{/if}
+			{#if deleteError}
+				<p class="pasc-meta">{deleteError}</p>
 			{/if}
 		</div>
 		{#if saveError}

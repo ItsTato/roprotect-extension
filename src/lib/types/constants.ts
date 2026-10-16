@@ -122,7 +122,9 @@ export const API_ACTIONS = {
 	GET_DISCORD_AVATARS: 'getDiscordAvatars',
 	GET_PASC_CLEARANCE: 'getPascClearance',
 	PASC_UPSERT_RECORD: 'pascUpsertRecord',
-	PASC_UPLOAD_FILE: 'pascUploadFile'
+	PASC_UPLOAD_FILE: 'pascUploadFile',
+	PASC_DOWNLOAD_FILE: 'pascDownloadFile',
+	PASC_DELETE_FILE: 'pascDeleteFile'
 } as const;
 
 export const CAPTCHA_EXTERNAL_MESSAGES = {

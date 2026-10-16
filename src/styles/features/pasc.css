@@ -125,6 +125,46 @@
 	}
 }
 
+@utility pasc-file-row-wrap {
+	@apply flex items-center gap-1.5;
+}
+
+@utility pasc-file-select {
+	@apply min-w-0 flex-1;
+}
+
+@utility pasc-file-delete {
+	@apply inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-[11px]! font-medium!;
+	border-color: var(--color-border);
+	color: var(--color-status-error);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+
+	&:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+}
+
+@utility pasc-file-image {
+	@apply rounded-md block-auto max-inline-full;
+	max-height: 16rem;
+}
+
+@utility pasc-file-download {
+	@apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[12px]! font-medium! no-underline inline-fit;
+	border-color: var(--color-border);
+	color: var(--color-text);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
 @utility pasc-file-name {
 	@apply min-w-0 flex-1 truncate font-medium!;
 }

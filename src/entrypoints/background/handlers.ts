@@ -25,7 +25,13 @@ import {
 	updateMembershipBadge
 } from './endpoints/extension';
 import { customApiCheckUser, customApiCheckMultipleUsers, apiWhoami } from './endpoints/custom';
-import { getPascClearance, uploadPascFile, upsertPascRecord } from './endpoints/pasc';
+import {
+	deletePascFile,
+	downloadPascFile,
+	getPascClearance,
+	uploadPascFile,
+	upsertPascRecord
+} from './endpoints/pasc';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
 import { getApiUsage } from './endpoints/usage';
@@ -164,6 +170,12 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		}
 		case API_ACTIONS.PASC_UPLOAD_FILE: {
 			return uploadPascFile(msg.userId, msg.filename, msg.bytesBase64, msg.contentType, msg.access);
+		}
+		case API_ACTIONS.PASC_DOWNLOAD_FILE: {
+			return downloadPascFile(msg.userId, msg.fileId);
+		}
+		case API_ACTIONS.PASC_DELETE_FILE: {
+			return deletePascFile(msg.userId, msg.fileId);
 		}
 	}
 }

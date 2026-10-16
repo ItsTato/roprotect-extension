@@ -40,6 +40,15 @@ function encodeArrayBufferBase64(bytes: ArrayBuffer): string {
 	return btoa(binary);
 }
 
+function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
+
 // The background HTTP layer owns retries + Retry-After + safe-method gating
 // Stacking retries here on top of that produced MAX_RETRIES² fetches per failure
 async function sendMessage<T>(
@@ -265,6 +274,29 @@ class RotectorApiClient {
 			bytesBase64: encodeArrayBufferBase64(bytes),
 			...(contentType !== undefined && { contentType }),
 			...(access !== undefined && { access })
+		});
+	}
+
+	async downloadPascFile(
+		userId: string | number,
+		fileId: string
+	): Promise<{ bytes: ArrayBuffer; contentType: string; filename: string }> {
+		const result = await sendMessage<{
+			bytesBase64: string;
+			contentType: string;
+			filename: string;
+		}>(API_ACTIONS.PASC_DOWNLOAD_FILE, { userId, fileId });
+		return {
+			bytes: decodeBase64ToArrayBuffer(result.bytesBase64),
+			contentType: result.contentType,
+			filename: result.filename
+		};
+	}
+
+	async deletePascFile(userId: string | number, fileId: string): Promise<{ deleted: string }> {
+		return sendMessage<{ deleted: string }>(API_ACTIONS.PASC_DELETE_FILE, {
+			userId,
+			fileId
 		});
 	}
 

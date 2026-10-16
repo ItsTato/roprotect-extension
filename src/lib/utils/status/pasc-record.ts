@@ -21,6 +21,10 @@ import { PASC_MISSING_BADGE, pickHighestSeveritySystemResult } from './status-ut
 
 const ACCESS_BADGE = /^Access (0|A1|A2|M1|M2)$/;
 const FILE_LEVEL_SUFFIX = /^(.*)\s+\[(0|A1|A2|M1|M2)\]$/;
+// Proxy lookup adapter format: "<fileId> <name> [<level>]". Upstream ids are
+// uuid hex (no spaces), so the match is constrained to that shape: legacy
+// entries without an id fall through to fileId null (no download/delete).
+const FILE_ID_PREFIX = /^([0-9a-fA-F]{32}) (.*)$/;
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'svg']);
 
 export function pascFileKind(name: string): PascCaseFile['kind'] {
@@ -31,14 +35,18 @@ export function pascFileKind(name: string): PascCaseFile['kind'] {
 }
 
 function mapFile(entry: string, fallbackLevel: PascAccessLevel, index: number): PascCaseFile {
-	const match = FILE_LEVEL_SUFFIX.exec(entry);
-	const name = (match?.[1] ?? entry).trim() || `file-${String(index + 1)}`;
+	const levelMatch = FILE_LEVEL_SUFFIX.exec(entry);
+	const withoutLevel = (levelMatch?.[1] ?? entry).trim();
+	const idMatch = FILE_ID_PREFIX.exec(withoutLevel);
+	const fileId = idMatch?.[1] ?? null;
+	const name = (idMatch?.[2] ?? withoutLevel).trim() || `file-${String(index + 1)}`;
 	return {
 		id: `file:${String(index)}:${name}`,
 		name,
 		kind: pascFileKind(name),
-		accessLevel: (match?.[2] as PascAccessLevel | undefined) ?? fallbackLevel,
-		sizeLabel: ''
+		accessLevel: (levelMatch?.[2] as PascAccessLevel | undefined) ?? fallbackLevel,
+		sizeLabel: '',
+		fileId
 	};
 }
 

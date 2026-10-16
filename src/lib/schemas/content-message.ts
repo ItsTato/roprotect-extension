@@ -178,6 +178,18 @@ const ContentMessageSchema = v.variant('action', [
 		// `v.instance(ArrayBuffer)`. The sender encodes, background decodes.
 		bytesBase64: v.pipe(v.string(), v.minLength(1)),
 		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_DOWNLOAD_FILE),
+		userId: UserId,
+		fileId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_DELETE_FILE),
+		userId: UserId,
+		fileId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		clientId: ClientId
 	})
 ]);
 

@@ -1561,6 +1561,7 @@
 					canEdit={$pascCanEdit && pascDisplayRecord.accessLevel !== null}
 					discordAccounts={pascDiscordAccounts}
 					onEdit={() => (pascEditing = true)}
+					onRefresh={refreshPasc}
 					record={pascDisplayRecord}
 					viewerLevel={$pascClearanceLevel}
 				/>

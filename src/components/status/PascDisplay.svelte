@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Pencil } from '@lucide/svelte';
+	import { Download, Pencil, Trash2 } from '@lucide/svelte';
 	import { getAssetUrl } from '@/lib/utils/assets';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
 	import TaseV2Display from './TaseV2Display.svelte';
 	import type { DiscordAvatar, TaseUserRecord } from '@/lib/schemas/custom-api';
+	import { apiClient } from '@/lib/services/rotector/api-client';
 	import { renderMarkdown } from '@/lib/utils/markdown';
 	import {
 		PASC_FLAG_COLORS,
@@ -12,6 +13,7 @@
 		PASC_FLAG_TO_NUMERIC,
 		pascCanSee,
 		type PascAccessLevel,
+		type PascCaseFile,
 		type PascDiscordAccount,
 		type PascFlag,
 		type PascRecord,
@@ -34,6 +36,7 @@
 		// Create action instead of the referral-only view.
 		draftRecord?: PascRecord | null;
 		onEdit?: () => void;
+		onRefresh?: (() => void) | undefined;
 	}
 
 	let {
@@ -43,7 +46,8 @@
 		canEdit,
 		referral = null,
 		draftRecord = null,
-		onEdit
+		onEdit,
+		onRefresh
 	}: Props = $props();
 
 	const pascLogo = getAssetUrl('/assets/pasc-scan.png');
@@ -80,21 +84,116 @@
 
 	let internalReviewHtml = $state('');
 	let filePreviewHtml = $state('');
+	let fileObjectUrl = $state<string | null>(null);
+	let fileContentType = $state('');
+	let fileLoading = $state(false);
+	let fileError = $state<string | null>(null);
+
+	let confirmingDeleteId = $state<string | null>(null);
+	let deletingFile = $state(false);
+	let fileActionError = $state<string | null>(null);
+
+	// Non-reactive: object URLs are revoked on selection/record change without
+	// subscribing the download effect (reading the state copy there would loop).
+	let lastObjectUrl: string | null = null;
+
+	const selectedIsImage = $derived(
+		fileContentType.startsWith('image/') ||
+			(selectedFile?.kind === 'image' && fileObjectUrl !== null)
+	);
 
 	$effect(() => {
 		if (!record) return;
+		confirmingDeleteId = null;
 		void renderMarkdown(record.internalReview).then((html) => {
 			internalReviewHtml = html;
 		});
-		const preview = selectedFile?.mockPreview;
+	});
+
+	// Downloads the selected file through the background (auth headers stay
+	// out of content scripts). Images render inline, markdown/text renders
+	// sanitized, anything else becomes a download link. Mock previews render
+	// without any fetch; files without an upstream id cannot be fetched.
+	$effect(() => {
+		const file = selectedFile;
+		if (lastObjectUrl) {
+			URL.revokeObjectURL(lastObjectUrl);
+			lastObjectUrl = null;
+		}
+		fileObjectUrl = null;
+		filePreviewHtml = '';
+		fileContentType = '';
+		fileError = null;
+		fileLoading = false;
+		const preview = file?.mockPreview;
 		if (preview) {
 			void renderMarkdown(preview).then((html) => {
 				filePreviewHtml = html;
 			});
-		} else {
-			filePreviewHtml = '';
+			return;
 		}
+		if (!file?.fileId || !record) return;
+		const fileId = file.fileId;
+		const userId = record.userId;
+		const kind = file.kind;
+		let cancelled = false;
+		fileLoading = true;
+		void apiClient
+			.downloadPascFile(userId, fileId)
+			.then((result) => {
+				if (cancelled) return;
+				fileLoading = false;
+				fileContentType = result.contentType;
+				if (result.contentType.startsWith('image/') || kind === 'image') {
+					fileObjectUrl = lastObjectUrl = URL.createObjectURL(
+						new Blob([result.bytes], { type: result.contentType })
+					);
+				} else if (
+					kind === 'markdown' ||
+					result.contentType.startsWith('text/') ||
+					result.contentType.includes('markdown')
+				) {
+					const text = new TextDecoder().decode(result.bytes);
+					void renderMarkdown(text).then((html) => {
+						if (!cancelled) filePreviewHtml = html;
+					});
+				} else {
+					fileObjectUrl = lastObjectUrl = URL.createObjectURL(
+						new Blob([result.bytes], { type: result.contentType })
+					);
+				}
+			})
+			.catch((error: unknown) => {
+				if (cancelled) return;
+				fileLoading = false;
+				fileError = error instanceof Error ? error.message : String(error);
+			});
+		return () => {
+			cancelled = true;
+		};
 	});
+
+	// M1+ file delete with two-click confirm. The tab refreshes from the
+	// lookup afterwards so the row disappears without a stale re-render.
+	async function deleteFile(file: PascCaseFile) {
+		if (!record || !file.fileId || deletingFile) return;
+		if (confirmingDeleteId !== file.id) {
+			confirmingDeleteId = file.id;
+			return;
+		}
+		confirmingDeleteId = null;
+		deletingFile = true;
+		fileActionError = null;
+		try {
+			await apiClient.deletePascFile(record.userId, file.fileId);
+			if (selectedFileId === file.id) selectedFileId = null;
+			onRefresh?.();
+		} catch (error) {
+			fileActionError = error instanceof Error ? error.message : String(error);
+		} finally {
+			deletingFile = false;
+		}
+	}
 
 	// RoWifi accounts shaped as a TASE record so the right column renders
 	// exactly like the base TASE tab. Every detected server rides along at
@@ -202,24 +301,67 @@
 						<div style:margin-top="0.75rem" class="pasc-note">
 							<span class="pasc-note-label">Case files ({visibleFiles.length})</span>
 							{#each visibleFiles as file (file.id)}
-								<button
-									class="pasc-file-row"
-									aria-pressed={selectedFileId === file.id}
-									onclick={() => (selectedFileId = selectedFileId === file.id ? null : file.id)}
-									type="button"
-								>
-									<span class="pasc-file-name">{file.name}</span>
-									<span class="pasc-file-meta"
-										>{file.accessLevel}{file.sizeLabel ? ` · ${file.sizeLabel}` : ''}</span
+								<div class="pasc-file-row-wrap">
+									<button
+										class="pasc-file-row pasc-file-select"
+										aria-pressed={selectedFileId === file.id}
+										onclick={() => {
+											confirmingDeleteId = null;
+											selectedFileId = selectedFileId === file.id ? null : file.id;
+										}}
+										type="button"
 									>
-								</button>
+										<span class="pasc-file-name">{file.name}</span>
+										<span class="pasc-file-meta"
+											>{file.accessLevel}{file.sizeLabel ? ` · ${file.sizeLabel}` : ''}</span
+										>
+									</button>
+									{#if canEdit && file.fileId}
+										<button
+											class="pasc-file-delete"
+											aria-label={confirmingDeleteId === file.id
+												? `Confirm delete ${file.name}`
+												: `Delete ${file.name}`}
+											disabled={deletingFile}
+											onclick={() => void deleteFile(file)}
+											title={confirmingDeleteId === file.id
+												? 'Click again to confirm'
+												: 'Delete file'}
+											type="button"
+										>
+											<Trash2 size={12} />
+											{confirmingDeleteId === file.id ? 'Sure?' : 'Delete'}
+										</button>
+									{/if}
+								</div>
 							{/each}
+							{#if fileActionError}
+								<p class="pasc-meta">{fileActionError}</p>
+							{/if}
 							{#if selectedFile}
 								<div class="pasc-file-viewer">
 									<span class="pasc-note-label">{selectedFile.name}</span>
 									{#if selectedFile.mockPreview}
 										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
 										<div class="pasc-markdown">{@html filePreviewHtml}</div>
+									{:else if fileLoading}
+										<p class="pasc-meta">Loading file…</p>
+									{:else if fileError}
+										<p class="pasc-meta">{fileError}</p>
+									{:else if filePreviewHtml}
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
+										<div class="pasc-markdown">{@html filePreviewHtml}</div>
+									{:else if selectedIsImage && fileObjectUrl}
+										<img class="pasc-file-image" alt={selectedFile.name} src={fileObjectUrl} />
+										<a class="pasc-file-download" download={selectedFile.name} href={fileObjectUrl}>
+											<Download size={12} />
+											Download
+										</a>
+									{:else if fileObjectUrl}
+										<a class="pasc-file-download" download={selectedFile.name} href={fileObjectUrl}>
+											<Download size={12} />
+											Download {selectedFile.name}
+										</a>
 									{:else}
 										<p class="pasc-meta">File download is not available in this build.</p>
 									{/if}
