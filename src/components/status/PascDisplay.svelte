@@ -112,6 +112,8 @@
 	let requestingReview = $state(false);
 	let reviewDone = $state<'report' | 'recheck' | null>(null);
 	let reviewError = $state<string | null>(null);
+	let reviewForm = $state<'report' | 'recheck' | null>(null);
+	let reviewComment = $state('');
 
 	const canRecheck = $derived(pascCanSee(viewerLevel, 'A1'));
 
@@ -130,6 +132,8 @@
 		requestingReview = false;
 		reviewDone = null;
 		reviewError = null;
+		reviewForm = null;
+		reviewComment = '';
 		if (!record) return;
 		confirmingDeleteId = null;
 		void renderMarkdown(record.internalReview).then((html) => {
@@ -276,12 +280,14 @@
 		requestingReview = true;
 		reviewError = null;
 		try {
+			const comment = reviewComment.trim();
 			if (kind === 'recheck' && record) {
 				await apiClient.requestPascReview(userId, kind, {
 					displayName: record.displayName,
 					username: record.username,
 					flag: PASC_FLAG_LABELS[record.flag],
-					verdicts: reviewVerdicts(record.providerVerdicts)
+					verdicts: reviewVerdicts(record.providerVerdicts),
+					comment
 				});
 			} else {
 				const source = draftRecord;
@@ -290,19 +296,62 @@
 					username: source?.username ?? username ?? '',
 					referralProvider: referral?.provider ?? '',
 					referralFlag: referral ? PASC_FLAG_LABELS[referral.flag] : '',
-					verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? [])
+					verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? []),
+					comment
 				});
 			}
 			reviewDone = kind;
+			reviewForm = null;
+			reviewComment = '';
 		} catch (error) {
 			reviewError = error instanceof Error ? error.message : String(error);
 		} finally {
 			requestingReview = false;
 		}
 	}
+
+	function toggleReviewForm(kind: 'report' | 'recheck') {
+		if (reviewDone) return;
+		reviewError = null;
+		if (reviewForm === kind) {
+			reviewForm = null;
+			return;
+		}
+		reviewForm = kind;
+		reviewComment = '';
+	}
 </script>
 
 <div class="pasc-container">
+	{#snippet reviewFormSnippet(kind: 'report' | 'recheck')}
+		{#if reviewForm === kind && reviewDone === null}
+			<div class="pasc-review-form">
+				<input
+					class="pasc-review-input"
+					aria-label={kind === 'report' ? 'Report note' : 'Recheck note'}
+					maxlength={280}
+					placeholder={kind === 'report'
+						? 'Why are you reporting this user? (optional)'
+						: 'What should moderators re-examine? (optional)'}
+					type="text"
+					bind:value={reviewComment}
+				/>
+				<div class="pasc-field-row">
+					<button
+						class="pasc-edit-button"
+						disabled={requestingReview}
+						onclick={() => void sendReviewRequest(kind)}
+						type="button"
+					>
+						{requestingReview ? 'Sending…' : 'Send'}
+					</button>
+					<button class="pasc-edit-button" onclick={() => (reviewForm = null)} type="button">
+						Cancel
+					</button>
+				</div>
+			</div>
+		{/if}
+	{/snippet}
 	{#if record}
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
@@ -325,22 +374,19 @@
 			{#if requestsEnabled && canRecheck}
 				<button
 					class="pasc-edit-button"
-					disabled={requestingReview || reviewDone !== null}
-					onclick={() => void sendReviewRequest('recheck')}
+					disabled={requestingReview}
+					onclick={() => toggleReviewForm('recheck')}
 					title="Ask a PASC moderator to re-examine this case file"
 					type="button"
 				>
-					{reviewDone === 'recheck'
-						? 'Recheck requested'
-						: requestingReview
-							? 'Sending…'
-							: 'Ask for Recheck'}
+					{reviewDone === 'recheck' ? 'Recheck requested' : 'Ask for Recheck'}
 				</button>
 			{/if}
 		</div>
 		{#if reviewError}
 			<p class="pasc-meta">{reviewError}</p>
 		{/if}
+		{@render reviewFormSnippet('recheck')}
 
 		<!-- The PASC flag is public to every clearance (0+) and overrides the other
 		     providers — always rendered, never gated on `visible` (see T:\Python Projects\TLET\PASC\PASC.md). -->
@@ -494,18 +540,19 @@
 			{#if requestsEnabled}
 				<button
 					class="pasc-edit-button"
-					disabled={requestingReview || reviewDone !== null}
-					onclick={() => void sendReviewRequest('report')}
+					disabled={requestingReview}
+					onclick={() => toggleReviewForm('report')}
 					title="Report this user to PASC moderators for review"
 					type="button"
 				>
-					{reviewDone === 'report' ? 'Report sent' : requestingReview ? 'Sending…' : 'Report'}
+					{reviewDone === 'report' ? 'Report sent' : 'Report'}
 				</button>
 			{/if}
 		</div>
 		{#if reviewError}
 			<p class="pasc-meta">{reviewError}</p>
 		{/if}
+		{@render reviewFormSnippet('report')}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon
@@ -554,18 +601,19 @@
 				<button
 					style:margin-inline-start="auto"
 					class="pasc-edit-button"
-					disabled={requestingReview || reviewDone !== null}
-					onclick={() => void sendReviewRequest('report')}
+					disabled={requestingReview}
+					onclick={() => toggleReviewForm('report')}
 					title="Report this user to PASC moderators for review"
 					type="button"
 				>
-					{reviewDone === 'report' ? 'Report sent' : requestingReview ? 'Sending…' : 'Report'}
+					{reviewDone === 'report' ? 'Report sent' : 'Report'}
 				</button>
 			{/if}
 		</div>
 		{#if reviewError}
 			<p class="pasc-meta">{reviewError}</p>
 		{/if}
+		{@render reviewFormSnippet('report')}
 		{#if referral}
 			<div class="pasc-provider-row">
 				<StatusIcon

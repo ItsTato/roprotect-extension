@@ -195,6 +195,7 @@ const ContentMessageSchema = v.variant('action', [
 		action: v.literal(API_ACTIONS.PASC_REQUEST_REVIEW),
 		userId: UserId,
 		kind: v.picklist(['report', 'recheck']),
+		comment: v.optional(v.pipe(v.string(), v.maxLength(280))),
 		displayName: v.optional(v.pipe(v.string(), v.maxLength(128))),
 		username: v.optional(v.pipe(v.string(), v.maxLength(128))),
 		flag: v.optional(v.pipe(v.string(), v.maxLength(32))),

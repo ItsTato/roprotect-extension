@@ -229,6 +229,7 @@ export interface PascReviewContext {
 	referralProvider?: string | undefined;
 	referralFlag?: string | undefined;
 	verdicts?: Array<{ provider: string; flag: string; detail: string }> | undefined;
+	comment?: string | undefined;
 }
 
 // Moderator review request (report / recheck). The proxy posts to Discord
@@ -251,7 +252,8 @@ export async function requestPascReview(
 			flag: context.flag ?? '',
 			referralProvider: context.referralProvider ?? '',
 			referralFlag: context.referralFlag ?? '',
-			verdicts: context.verdicts ?? []
+			verdicts: context.verdicts ?? [],
+			comment: context.comment ?? ''
 		}),
 		clientId,
 		rawResponse: true,

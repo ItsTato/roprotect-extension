@@ -188,7 +188,8 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 					flag: msg.flag,
 					referralProvider: msg.referralProvider,
 					referralFlag: msg.referralFlag,
-					verdicts: msg.verdicts
+					verdicts: msg.verdicts,
+					comment: msg.comment
 				},
 				msg.clientId ?? undefined
 			);

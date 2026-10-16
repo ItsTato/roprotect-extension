@@ -310,6 +310,7 @@ class RotectorApiClient {
 			referralProvider?: string;
 			referralFlag?: string;
 			verdicts?: Array<{ provider: string; flag: string; detail: string }>;
+			comment?: string;
 		} = {}
 	): Promise<{ requested: string; user_id: number }> {
 		return sendMessage<{ requested: string; user_id: number }>(API_ACTIONS.PASC_REQUEST_REVIEW, {
@@ -322,7 +323,8 @@ class RotectorApiClient {
 				referralProvider: context.referralProvider
 			}),
 			...(context.referralFlag !== undefined && { referralFlag: context.referralFlag }),
-			...(context.verdicts !== undefined && { verdicts: context.verdicts })
+			...(context.verdicts !== undefined && { verdicts: context.verdicts }),
+			...(context.comment !== undefined && { comment: context.comment })
 		});
 	}
 
