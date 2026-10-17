@@ -96,6 +96,7 @@
 	let selectedFileId = $state<string | null>(null);
 	const selectedFile = $derived(visibleFiles.find((f) => f.id === selectedFileId) ?? null);
 
+	let publicNoteHtml = $state('');
 	let internalReviewHtml = $state('');
 	let filePreviewHtml = $state('');
 	let fileObjectUrl = $state<string | null>(null);
@@ -120,6 +121,10 @@
 	// subscribing the download effect (reading the state copy there would loop).
 	let lastObjectUrl: string | null = null;
 
+	// Non-reactive: guards the async note renders so a slow promise for a
+	// previous user cannot overwrite the current user's notes.
+	let noteRenderToken = 0;
+
 	const selectedIsImage = $derived(
 		fileContentType.startsWith('image/') ||
 			(selectedFile?.kind === 'image' && fileObjectUrl !== null)
@@ -130,10 +135,17 @@
 		void userId;
 		reviewModal = null;
 		reviewDone = null;
+		publicNoteHtml = '';
+		internalReviewHtml = '';
 		if (!record) return;
 		confirmingDeleteId = null;
+		// Both reviewer fields render as markdown; each resolves independently.
+		const token = ++noteRenderToken;
+		void renderMarkdown(record.publicNote).then((html) => {
+			if (token === noteRenderToken) publicNoteHtml = html;
+		});
 		void renderMarkdown(record.internalReview).then((html) => {
-			internalReviewHtml = html;
+			if (token === noteRenderToken) internalReviewHtml = html;
 		});
 	});
 
@@ -382,7 +394,8 @@
 							>PASC finding{#if record.accessLevel}
 								(public, {record.accessLevel}+){/if}</span
 						>
-						{record.publicNote}
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
+						<div class="pasc-markdown">{@html publicNoteHtml}</div>
 					</div>
 					{#if canSeeInternal}
 						<div style:margin-top="0.75rem" class="pasc-note">
