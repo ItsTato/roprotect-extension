@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
-	import { SvelteMap } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import {
 		getUserOutfits,
 		THUMBNAIL_RETRY_DELAY,
@@ -22,6 +22,11 @@
 	// 429 as a 30s wait and never trust a header that would hold the modal hostage for minutes
 	const RATE_LIMIT_FALLBACK_COOLDOWN = 30;
 	const RATE_LIMIT_MAX_COOLDOWN = 120;
+
+	// Hard stop for the wardrobe walk. Roblox normally ends the chain with a null
+	// pagination token, but a repeated or malformed token would otherwise page forever
+	// and keep allocating outfit records for the lifetime of the tab.
+	const MAX_OUTFIT_PAGES = 1000;
 
 	interface Props {
 		userId: string;
@@ -169,6 +174,7 @@
 
 		try {
 			const collected: OutfitWithThumbnail[] = [];
+			const seenCursors = new SvelteSet<string>();
 			let page = 1;
 			let hasMore = true;
 
@@ -176,7 +182,28 @@
 				const result = await getUserOutfits(userId, page, VIEWER_ITEMS_PER_PAGE);
 				collected.push(...result.outfits);
 				loadedCount = collected.length;
+
+				if (result.nextCursor !== null) {
+					// A repeated pagination token means the API is not advancing; stop instead of
+					// appending the same page forever.
+					if (seenCursors.has(result.nextCursor)) {
+						logger.warn('Outfit pagination cursor repeated; stopping wardrobe walk', {
+							page,
+							total: collected.length
+						});
+						break;
+					}
+					seenCursors.add(result.nextCursor);
+				}
+
 				hasMore = result.hasNextPage;
+				if (hasMore && page >= MAX_OUTFIT_PAGES) {
+					logger.warn('Outfit wardrobe walk reached page cap', {
+						page,
+						total: collected.length
+					});
+					break;
+				}
 				page++;
 			}
 

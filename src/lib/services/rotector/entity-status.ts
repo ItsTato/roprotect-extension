@@ -12,6 +12,11 @@ interface CacheEntry<T> {
 	timestamp: number;
 }
 
+// Status objects are small but unbounded scans (friends, group members, tracked
+// users) can populate one entry per entity. Keep the cache bounded and evict the
+// least recently used entries once it grows past this ceiling.
+const MAX_CACHE_ENTRIES = 5000;
+
 interface StatusRequest<T> {
 	resolve: (value: T | null) => void;
 	reject: (error: Error) => void;
@@ -151,7 +156,22 @@ class EntityStatusService<T extends EntityStatus> {
 			return null;
 		}
 
+		// Refresh insertion order so eviction is least-recently-used
+		this.cache.delete(entityId);
+		this.cache.set(entityId, entry);
 		return entry.data;
+	}
+
+	// Writes a cache entry and trims the oldest entries when the ceiling is exceeded
+	private setCachedStatus(entityId: string, data: T): void {
+		this.cache.delete(entityId);
+		this.cache.set(entityId, { data, timestamp: Date.now() });
+
+		while (this.cache.size > MAX_CACHE_ENTRIES) {
+			const oldestKey = this.cache.keys().next().value;
+			if (oldestKey === undefined) break;
+			this.cache.delete(oldestKey);
+		}
 	}
 
 	// Chunks uncached IDs through fetchMultiple in batches with abort support, fills missing entries with null
@@ -230,10 +250,7 @@ class EntityStatusService<T extends EntityStatus> {
 			for (const status of batchStatuses) {
 				if (status.id) {
 					const entityId = status.id.toString();
-					this.cache.set(entityId, {
-						data: status,
-						timestamp: Date.now()
-					});
+					this.setCachedStatus(entityId, status);
 					results.set(entityId, status);
 				}
 			}
@@ -250,10 +267,7 @@ class EntityStatusService<T extends EntityStatus> {
 	}
 
 	public updateStatus(entityId: string, status: T): void {
-		this.cache.set(entityId, {
-			data: status,
-			timestamp: Date.now()
-		});
+		this.setCachedStatus(entityId, status);
 	}
 
 	public invalidateCache(entityId: string): void {
@@ -266,7 +280,7 @@ class EntityStatusService<T extends EntityStatus> {
 			const status = await this.fetchSingle(entityId, { signal: entry.controller.signal });
 			const snapshot = [...entry.queue];
 			this.pendingRequests.delete(entityId);
-			this.cache.set(entityId, { data: status, timestamp: Date.now() });
+			this.setCachedStatus(entityId, status);
 			for (const request of snapshot) request.resolve(status);
 		} catch (error) {
 			const err = asApiError(error);

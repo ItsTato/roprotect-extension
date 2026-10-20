@@ -31,6 +31,22 @@ let outfitPageChain: Promise<unknown> = Promise.resolve();
 const pageCache = new Map<string, PaginatedOutfitsResult>();
 const pendingRequests = new Map<string, Promise<PaginatedOutfitsResult>>();
 
+// A wardrobe walk can request hundreds of pages, and every page keeps its outfit
+// records alive for the lifetime of the tab. Bound the cache to the most recently
+// fetched pages; older pages are simply refetched if they are needed again.
+const MAX_CACHED_PAGES = 256;
+
+function cachePage(key: string, page: PaginatedOutfitsResult): void {
+	pageCache.delete(key);
+	pageCache.set(key, page);
+
+	while (pageCache.size > MAX_CACHED_PAGES) {
+		const oldestKey = pageCache.keys().next().value;
+		if (oldestKey === undefined) break;
+		pageCache.delete(oldestKey);
+	}
+}
+
 // Runs `task` after every previously queued outfit page request has settled, waiting out the
 // remainder of the minimum interval first
 async function paceOutfitPageRequest<T>(task: () => Promise<T>): Promise<T> {
@@ -62,6 +78,9 @@ export async function getUserOutfits(
 
 	const cached = pageCache.get(cacheKey);
 	if (cached) {
+		// Refresh insertion order so eviction is least-recently-used
+		pageCache.delete(cacheKey);
+		pageCache.set(cacheKey, cached);
 		return cached;
 	}
 
@@ -87,7 +106,7 @@ export async function getUserOutfits(
 
 	try {
 		const result = await promise;
-		pageCache.set(cacheKey, result);
+		cachePage(cacheKey, result);
 		return result;
 	} finally {
 		pendingRequests.delete(cacheKey);

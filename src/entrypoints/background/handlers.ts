@@ -1,5 +1,5 @@
 import { API_ACTIONS } from '@/lib/types/constants';
-import type { MembershipBadgeUpdatePayload, PascRecordUpsert } from '@/lib/types/api';
+import type { MembershipBadgeUpdatePayload } from '@/lib/types/api';
 import type { ContentMessage } from '@/lib/schemas/content-message';
 import {
 	getUnprocessedUserIdsFromStorage,
@@ -170,11 +170,7 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			return getPascClearance(msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.PASC_UPSERT_RECORD: {
-			return upsertPascRecord(
-				msg.userId,
-				msg.record as unknown as PascRecordUpsert,
-				msg.clientId ?? undefined
-			);
+			return upsertPascRecord(msg.userId, msg.record, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.PASC_UPLOAD_FILE: {
 			return uploadPascFile(

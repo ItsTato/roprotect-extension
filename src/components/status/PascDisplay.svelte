@@ -217,6 +217,10 @@
 			});
 		return () => {
 			cancelled = true;
+			if (lastObjectUrl) {
+				URL.revokeObjectURL(lastObjectUrl);
+				lastObjectUrl = null;
+			}
 		};
 	});
 

@@ -157,11 +157,12 @@ export async function uploadPascFile(
 		{ method: 'POST', body: form },
 		clientId
 	);
-	const payload = (await response.json()) as {
-		success?: boolean;
-		data?: unknown;
-		error?: unknown;
-	};
+	let payload: { success?: boolean; data?: unknown; error?: unknown } = {};
+	try {
+		payload = (await response.json()) as typeof payload;
+	} catch {
+		// Non-JSON body: fall through to the HTTP-status error below.
+	}
 	if (!response.ok || !payload.success) {
 		throw new Error(
 			typeof payload.error === 'string' && payload.error
@@ -266,11 +267,16 @@ export async function deletePascFile(
 		{ method: 'DELETE' },
 		clientId
 	);
-	const payload = (await response.json()) as {
+	let payload: {
 		success?: boolean;
 		data?: { deleted?: unknown };
 		error?: unknown;
-	};
+	} = {};
+	try {
+		payload = (await response.json()) as typeof payload;
+	} catch {
+		// Non-JSON body: fall through to the HTTP-status error below.
+	}
 	if (!response.ok || !payload.success) {
 		throw new Error(
 			typeof payload.error === 'string' && payload.error

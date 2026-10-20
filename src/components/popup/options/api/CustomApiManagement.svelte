@@ -69,7 +69,8 @@
 	);
 
 	function getLogo(api: CustomApiConfig): string | undefined {
-		const isSigmanet = api.id === 'system-scsn' || api.name.trim().toUpperCase() === 'SIGMANET';
+		const isSigmanet =
+			api.id === 'system-scsn' || (api.isSystem && api.name.trim().toUpperCase() === 'SIGMANET');
 		if (isSigmanet) return sigmanetLogo;
 		return api.landscapeImageDataUrl;
 	}

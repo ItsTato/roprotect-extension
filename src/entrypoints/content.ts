@@ -193,10 +193,19 @@ export default defineContentScript({
 							}
 						});
 					}
+					// Teardown (gate close / unsupported navigation) may have won
+					// while the stylesheet or shadow root was loading: never mount
+					// an overlay the current navigation already discarded.
+					if (epoch !== activationEpoch) {
+						const staleOverlay = overlay;
+						overlay = null;
+						staleOverlay.remove();
+						return;
+					}
+
 					overlay.mount();
 
-					// Teardown (gate close / unsupported navigation) won while the
-					// stylesheet or mount was pending: discard this activation.
+					// Safety net for a teardown that raced the mount itself.
 					if (epoch !== activationEpoch) {
 						const staleOverlay = overlay;
 						overlay = null;

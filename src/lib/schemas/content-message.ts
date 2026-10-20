@@ -173,7 +173,14 @@ const ContentMessageSchema = v.variant('action', [
 	v.object({
 		action: v.literal(API_ACTIONS.PASC_UPSERT_RECORD),
 		userId: UserId,
-		record: v.record(v.string(), v.unknown()),
+		record: v.strictObject({
+			flag: v.number(),
+			accessLevel: v.optional(v.string()),
+			publicNote: v.optional(v.string()),
+			publicNoteLevel: v.optional(v.string()),
+			internalReview: v.optional(v.string()),
+			reviewer: v.optional(v.string())
+		}),
 		clientId: ClientId
 	}),
 	v.object({
