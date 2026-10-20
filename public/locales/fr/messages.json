@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Ce {0} a été examiné par notre système et ne présente pas suffisamment de preuves pour être signalé.",
 	"tooltip_header_redacted": "Ce compte a été signalé pour des violations graves. Les raisons spécifiques et les preuves ne sont plus affichées conformément aux lois sur la protection des données applicables.",
 	"tooltip_header_safe": "Ce {0} n'a pas encore été examiné.",
-	"tooltip_header_toggle_aria": "Basculer l'en-tête compact",
 	"tooltip_header_unavailable": "Informations de statut non disponibles.",
 	"tooltip_header_unsafe_auto": "Ce {0} a été confirmé automatiquement par notre système en raison de sa haute gravité.",
 	"tooltip_header_unsafe_pre": "Ce {0} a été vérifié comme étant inapproprié par ",

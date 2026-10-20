@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Ang {0} na ito ay sinuri ng aming sistema at walang sapat na ebidensya para ma-flag.",
 	"tooltip_header_redacted": "Ang account na ito ay na-flag dahil sa malalang paglabag. Hindi na ipinapakita ang mga partikular na dahilan at ebidensya bilang pagsunod sa naaangkop na mga batas sa privacy.",
 	"tooltip_header_safe": "Ang {0} na ito ay hindi pa nasusuri.",
-	"tooltip_header_toggle_aria": "I-toggle ang compact header",
 	"tooltip_header_unavailable": "Hindi available ang impormasyon ng status.",
 	"tooltip_header_unsafe_auto": "Ang {0} na ito ay auto-nakumpirma ng aming sistema dahil sa mataas na kalubhaan.",
 	"tooltip_header_unsafe_pre": "Ang {0} na ito ay na-verify bilang hindi angkop ng ",

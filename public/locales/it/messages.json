@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Questo {0} è stato esaminato dal nostro sistema e non presenta prove sufficienti per essere segnalato.",
 	"tooltip_header_redacted": "Questo account è stato segnalato per gravi violazioni. Le motivazioni specifiche e le prove non sono più mostrate in conformità con le leggi sulla privacy applicabili.",
 	"tooltip_header_safe": "Questo {0} non è ancora stato rivisto.",
-	"tooltip_header_toggle_aria": "Attiva/disattiva intestazione compatta",
 	"tooltip_header_unavailable": "Informazioni sullo stato non disponibili.",
 	"tooltip_header_unsafe_auto": "Questo {0} è stato confermato automaticamente dal nostro sistema a causa dell'elevata gravità.",
 	"tooltip_header_unsafe_pre": "Questo {0} è stato verificato come inappropriato da ",

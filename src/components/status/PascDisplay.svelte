@@ -3,15 +3,13 @@
 	import { getAssetUrl } from '@/lib/utils/assets';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
-	import TaseV2Display from './TaseV2Display.svelte';
+	import PascLinkedDiscord from './PascLinkedDiscord.svelte';
 	import PascReviewModal from './PascReviewModal.svelte';
-	import type { DiscordAvatar, TaseUserRecord } from '@/lib/schemas/custom-api';
 	import { apiClient } from '@/lib/services/rotector/api-client';
 	import { renderMarkdown } from '@/lib/utils/markdown';
 	import {
 		PASC_FLAG_COLORS,
 		PASC_FLAG_LABELS,
-		PASC_FLAG_TO_NUMERIC,
 		pascCanSee,
 		type PascAccessLevel,
 		type PascCaseFile,
@@ -86,9 +84,12 @@
 	const visibleFiles = $derived(
 		record?.files.filter((f) => pascCanSee(viewerLevel, f.accessLevel)) ?? []
 	);
-	// TASE renders in the right column as the full account display, not with the
-	// other providers. Falls back to the creation draft so the full layout
-	// renders for M1+ viewers even before a record exists.
+	// Discord links are the most sensitive part of the case file: require A2+
+	// on top of the record's own visibility gate, regardless of how low the
+	// record itself is classified.
+	const canSeeDiscord = $derived(pascCanSee(viewerLevel, 'A2'));
+	// TASE is represented by the linked-Discord block in the right column, so
+	// its verdict is not repeated among the provider rows.
 	const providerRows = $derived(
 		(record ?? draftRecord)?.providerVerdicts.filter((v) => v.provider !== 'TASE') ?? []
 	);
@@ -234,44 +235,8 @@
 		}
 	}
 
-	// RoWifi accounts shaped as a TASE record so the right column renders
-	// exactly like the base TASE tab. Every detected server rides along at
-	// its own severity — past-offender sightings included. Falls back to a
-	// safe empty shape when there is no record (never rendered then, but the
-	// derived runs regardless).
-	const taseRecord = $derived.by(
-		(): TaseUserRecord => ({
-			id: record ? Number.parseInt(record.userId, 10) || 0 : 0,
-			flagType: PASC_FLAG_TO_NUMERIC[record?.flag ?? referral?.flag ?? 'safe'],
-			detections: Object.fromEntries(
-				discordAccounts.map((account) => [
-					account.id,
-					{
-						detectedGuilds: account.servers.map((server) => ({
-							guildId: server.id,
-							guildName: server.name,
-							flag_type: server.flagType
-						}))
-					}
-				])
-			)
-		})
-	);
-
-	const taseAvatars = $derived.by(
-		(): Record<string, DiscordAvatar> =>
-			Object.fromEntries(
-				discordAccounts.map((account) => [
-					account.id,
-					{
-						username: account.username,
-						globalName: account.globalName,
-						displayName: account.globalName,
-						avatarDataUrl: account.avatarDataUrl
-					}
-				])
-			)
-	);
+	// RoWifi accounts already arrive in the shape the linked-Discord block
+	// renders; no TASE record reshaping is needed here.
 
 	function reviewVerdicts(
 		verdicts: PascProviderVerdict[]
@@ -337,7 +302,7 @@
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
 			{#if record.accessLevel}
-				<span class="pasc-access-chip">Access {record.accessLevel}</span>
+				<span class="pasc-access-chip">{record.accessLevel}</span>
 			{:else}
 				<span class="pasc-access-chip">Restricted</span>
 			{/if}
@@ -373,10 +338,13 @@
 		</div>
 
 		{#if visible}
-			<div class="pasc-columns" class:pasc-columns-single={discordAccounts.length === 0}>
+			<div
+				class="pasc-columns"
+				class:pasc-columns-single={discordAccounts.length === 0 || !canSeeDiscord}
+			>
 				<div>
 					<h4 class="pasc-column-title">Provider verdicts</h4>
-					<div class="pasc-container">
+					<div class="pasc-container mt-2">
 						{#each providerRows as verdict (verdict.provider)}
 							<div class="pasc-provider-row">
 								<StatusIcon
@@ -477,19 +445,26 @@
 							{/if}
 						</div>
 					{/if}
-					<p class="pasc-meta">
-						Reviewed by {record.reviewer} · {record.updatedAt}
-					</p>
 				</div>
-				{#if discordAccounts.length > 0}
-					<div>
-						<h4 class="pasc-column-title">Linked Discord (RoWifi)</h4>
-						<TaseV2Display avatars={taseAvatars} {taseRecord} />
-					</div>
+				{#if discordAccounts.length > 0 && canSeeDiscord}
+					<PascLinkedDiscord
+						accessLevel={record.accessLevel}
+						accounts={discordAccounts}
+						{viewerLevel}
+					/>
 				{/if}
 			</div>
+			{#if record.reviewer || record.updatedAt}
+				<p class="pasc-footer">
+					{#if record.reviewer}
+						Reviewed by {record.reviewer}{record.updatedAt ? ` · ${record.updatedAt}` : ''}
+					{:else}
+						Updated {record.updatedAt}
+					{/if}
+				</p>
+			{/if}
 		{:else}
-			<p class="pasc-meta">
+			<p class="pasc-footer">
 				{#if record.accessLevel}
 					Case details require {record.accessLevel} clearance — flag shown for all levels.
 				{:else}
@@ -536,10 +511,13 @@
 				<span class="pasc-provider-detail">{PASC_FLAG_LABELS[referral.flag]}</span>
 			</div>
 		{/if}
-		<div class="pasc-columns" class:pasc-columns-single={discordAccounts.length === 0}>
+		<div
+			class="pasc-columns"
+			class:pasc-columns-single={discordAccounts.length === 0 || !canSeeDiscord}
+		>
 			<div>
 				<h4 class="pasc-column-title">Provider verdicts</h4>
-				<div class="pasc-container">
+				<div class="pasc-container mt-2">
 					{#each providerRows as verdict (verdict.provider)}
 						<div class="pasc-provider-row">
 							<StatusIcon
@@ -552,17 +530,12 @@
 						</div>
 					{/each}
 				</div>
-				<p class="pasc-meta">
-					No PASC case file for this user — create one to start a human review.
-				</p>
 			</div>
-			{#if discordAccounts.length > 0}
-				<div>
-					<h4 class="pasc-column-title">Linked Discord (RoWifi)</h4>
-					<TaseV2Display avatars={taseAvatars} {taseRecord} />
-				</div>
+			{#if discordAccounts.length > 0 && canSeeDiscord}
+				<PascLinkedDiscord accessLevel={null} accounts={discordAccounts} {viewerLevel} />
 			{/if}
 		</div>
+		<p class="pasc-footer">No PASC case file for this user — create one to start a human review.</p>
 	{:else}
 		<!-- No PASC case file: the verdict is referred to the highest relied-upon
 		     provider verdict. No override, no edit (nothing to edit). -->
@@ -591,11 +564,11 @@
 				<span class="pasc-provider-name">Referred to {referral.provider}</span>
 				<span class="pasc-provider-detail">{PASC_FLAG_LABELS[referral.flag]}</span>
 			</div>
-			<p class="pasc-meta">
+			<p class="pasc-footer">
 				No PASC case file for this user — verdict deferred to the highest relied-upon provider.
 			</p>
 		{:else}
-			<p class="pasc-meta">No PASC case file for this user.</p>
+			<p class="pasc-footer">No PASC case file for this user.</p>
 		{/if}
 	{/if}
 	{#if reviewModal}

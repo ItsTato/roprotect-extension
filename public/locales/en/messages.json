@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "This {0} has been reviewed by our system and does not have sufficient evidence to be flagged.",
 	"tooltip_header_redacted": "This account was flagged for serious violations. Specific reasons and evidence are no longer shown in compliance with applicable privacy laws.",
 	"tooltip_header_safe": "This {0} has not been reviewed yet.",
-	"tooltip_header_toggle_aria": "Toggle compact header",
 	"tooltip_header_unavailable": "Status information unavailable.",
 	"tooltip_header_unsafe_auto": "This {0} has been auto-confirmed by our system due to high severity.",
 	"tooltip_header_unsafe_pre": "This {0} has been verified as inappropriate by ",

@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "此{0}已被我们的系统审查，没有足够的证据将其标记。",
 	"tooltip_header_redacted": "此账号因严重违规被标记。依据适用的隐私法律不再显示具体原因和证据。",
 	"tooltip_header_safe": "此{0}尚未被审查。",
-	"tooltip_header_toggle_aria": "切换紧凑标题",
 	"tooltip_header_unavailable": "状态信息不可用。",
 	"tooltip_header_unsafe_auto": "此{0}因严重程度较高已被我们的系统自动确认。",
 	"tooltip_header_unsafe_pre": "此{0}已被",

@@ -29,7 +29,6 @@ export const SETTINGS_KEYS = {
 	EXPANDED_TOOLTIP_HEIGHT: 'expandedTooltipHeight',
 	PREVIEW_TOOLTIP_WIDTH: 'previewTooltipWidth',
 	PREVIEW_TOOLTIP_HEIGHT: 'previewTooltipHeight',
-	EXPANDED_HEADER_HEIGHT: 'expandedHeaderHeight',
 	INFO_POPOVER_HINTS_SEEN: 'infoPopoverHintsSeen',
 	LEGAL_ACCEPTED_VERSION: 'legalAcceptedVersion',
 	LEGAL_DECLINED: 'legalDeclined',
@@ -81,7 +80,6 @@ export interface Settings {
 	[SETTINGS_KEYS.EXPANDED_TOOLTIP_HEIGHT]?: number;
 	[SETTINGS_KEYS.PREVIEW_TOOLTIP_WIDTH]?: number;
 	[SETTINGS_KEYS.PREVIEW_TOOLTIP_HEIGHT]?: number;
-	[SETTINGS_KEYS.EXPANDED_HEADER_HEIGHT]?: number;
 	[SETTINGS_KEYS.INFO_POPOVER_HINTS_SEEN]: string[];
 	[SETTINGS_KEYS.LEGAL_ACCEPTED_VERSION]: string;
 	[SETTINGS_KEYS.LEGAL_DECLINED]: boolean;

@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "이 {0}은(는) 시스템에 의해 검토되었으며 플래그를 지정할 충분한 증거가 없습니다.",
 	"tooltip_header_redacted": "이 계정은 심각한 위반으로 신고되었습니다. 적용되는 개인정보 보호법에 따라 구체적인 이유와 증거가 표시되지 않습니다.",
 	"tooltip_header_safe": "이 {0}은(는) 아직 검토되지 않았습니다.",
-	"tooltip_header_toggle_aria": "간결한 헤더 전환",
 	"tooltip_header_unavailable": "상태 정보를 사용할 수 없습니다.",
 	"tooltip_header_unsafe_auto": "이 {0}은(는) 높은 심각도로 인해 시스템에 의해 자동 확인되었습니다.",
 	"tooltip_header_unsafe_pre": "이 {0}은(는) ",

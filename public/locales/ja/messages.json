@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "この{0}はシステムによってレビューされ、フラグを付けるための十分な証拠がありませんでした。",
 	"tooltip_header_redacted": "このアカウントは重大な違反でフラグが立てられました。適用される個人情報保護法に従い、具体的な理由および証拠は表示されません。",
 	"tooltip_header_safe": "この{0}はまだレビューされていません。",
-	"tooltip_header_toggle_aria": "コンパクトヘッダーの切り替え",
 	"tooltip_header_unavailable": "ステータス情報が利用できません。",
 	"tooltip_header_unsafe_auto": "この{0}は重大度が高いため、システムによって自動確認されました。",
 	"tooltip_header_unsafe_pre": "この{0}は",

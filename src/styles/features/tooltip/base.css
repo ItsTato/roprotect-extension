@@ -95,27 +95,26 @@
 	max-height: calc(80vh - 60px);
 }
 
+/* Inset far enough that the container's rounded corner (and its
+   `overflow-hidden`) cannot clip the dot grid. The gradient origin is offset
+   into the tile so the last dot row fits inside the 14px box. */
 @utility tooltip-resize-handle {
-	@apply absolute right-1 bottom-1 z-4 h-3 w-3 cursor-nwse-resize;
+	@apply absolute z-4 h-3.5 w-3.5 cursor-nwse-resize;
+	inset-inline-end: 0.75rem;
+	inset-block-end: 0.75rem;
 	opacity: 0.4;
 	transition: opacity 0.15s ease;
-	background-image: radial-gradient(circle, var(--color-text-subtle) 1.5px, transparent 1.5px);
+	background-image: radial-gradient(
+		circle at 2.5px 2.5px,
+		var(--color-text-subtle) 1.2px,
+		transparent 1.3px
+	);
 	background-size: 5px 5px;
-	background-position: 0 0;
+	touch-action: none;
+	user-select: none;
 
 	&:hover {
 		opacity: 0.7;
-	}
-}
-
-@utility tooltip-header-toggle {
-	@apply absolute bottom-0 left-0 z-4 h-1 cursor-pointer border-none p-0 inline-full;
-	opacity: 0;
-	transition: opacity 0.15s ease;
-	background: var(--color-border);
-
-	&:hover {
-		opacity: 0.6;
 	}
 }
 
@@ -138,6 +137,8 @@
 	}
 }
 
+/* Compact header right column: header message + reviewer sit inline with the
+   avatar/identity instead of stacking below the profile header. */
 @utility tooltip-compact-header-right {
 	display: none;
 

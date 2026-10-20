@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Diese(r) {0} wurde von unserem System überprüft und es gibt keine ausreichenden Beweise für eine Markierung.",
 	"tooltip_header_redacted": "Dieses Konto wurde wegen schwerwiegender Verstöße markiert. Konkrete Gründe und Belege werden gemäß geltendem Datenschutzrecht nicht mehr angezeigt.",
 	"tooltip_header_safe": "Diese(r) {0} wurde noch nicht überprüft.",
-	"tooltip_header_toggle_aria": "Kompakten Header umschalten",
 	"tooltip_header_unavailable": "Statusinformationen nicht verfügbar.",
 	"tooltip_header_unsafe_auto": "Diese(r) {0} wurde aufgrund hoher Schwere automatisch von unserem System bestätigt.",
 	"tooltip_header_unsafe_pre": "Diese(r) {0} wurde von ",

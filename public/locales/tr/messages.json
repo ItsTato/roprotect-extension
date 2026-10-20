@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Bu {0} sistemimiz tarafından incelendi ve işaretlenmek için yeterli kanıt bulunamamıştır.",
 	"tooltip_header_redacted": "Bu hesap ciddi ihlaller nedeniyle işaretlenmiştir. Geçerli gizlilik yasalarına uygun olarak belirli sebepler ve kanıtlar artık gösterilmemektedir.",
 	"tooltip_header_safe": "Bu {0} henüz incelenmedi.",
-	"tooltip_header_toggle_aria": "Kompakt başlığı aç/kapat",
 	"tooltip_header_unavailable": "Durum bilgisi mevcut değil.",
 	"tooltip_header_unsafe_auto": "Bu {0} yüksek ciddiyet nedeniyle sistemimiz tarafından otomatik olarak onaylandı.",
 	"tooltip_header_unsafe_pre": "Bu {0} ",

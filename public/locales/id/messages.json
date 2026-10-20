@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "{0} ini telah ditinjau oleh sistem kami dan tidak memiliki cukup bukti untuk ditandai.",
 	"tooltip_header_redacted": "Akun ini ditandai karena pelanggaran serius. Alasan spesifik dan bukti tidak lagi ditampilkan sesuai dengan undang-undang privasi yang berlaku.",
 	"tooltip_header_safe": "{0} ini belum ditinjau.",
-	"tooltip_header_toggle_aria": "Alihkan header ringkas",
 	"tooltip_header_unavailable": "Informasi status tidak tersedia.",
 	"tooltip_header_unsafe_auto": "{0} ini telah dikonfirmasi secara otomatis oleh sistem kami karena tingkat keparahan yang tinggi.",
 	"tooltip_header_unsafe_pre": "{0} ini telah diverifikasi sebagai tidak pantas oleh ",

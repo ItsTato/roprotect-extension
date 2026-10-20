@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Deze {0} is beoordeeld door ons systeem en heeft onvoldoende bewijs om gemarkeerd te worden.",
 	"tooltip_header_redacted": "Dit account is gemarkeerd wegens ernstige overtredingen. Specifieke redenen en bewijzen worden niet meer getoond, in overeenstemming met de toepasselijke privacywetgeving.",
 	"tooltip_header_safe": "Deze {0} is nog niet beoordeeld.",
-	"tooltip_header_toggle_aria": "Compacte koptekst in-/uitschakelen",
 	"tooltip_header_unavailable": "Statusinformatie niet beschikbaar.",
 	"tooltip_header_unsafe_auto": "Deze {0} is automatisch bevestigd door ons systeem vanwege de hoge ernst.",
 	"tooltip_header_unsafe_pre": "Deze {0} is geverifieerd als ongepast door ",

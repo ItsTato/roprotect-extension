@@ -1,0 +1,14 @@
+/* =================================
+   RADIUS SCALE
+   One step softer than Tailwind's defaults so cards, chips, fields and modals
+   read as the same rounded family instead of a mix of near-square corners.
+   ================================= */
+
+@theme {
+	--radius-xs: 0.375rem;
+	--radius-sm: 0.5rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+	--radius-2xl: 1.25rem;
+}

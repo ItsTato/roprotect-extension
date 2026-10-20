@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "{0} ini telah disemak oleh sistem kami dan tidak mempunyai bukti yang mencukupi untuk dibenderakan.",
 	"tooltip_header_redacted": "Akaun ini telah dibenderakan kerana pelanggaran serius. Sebab dan bukti khusus tidak lagi ditunjukkan mengikut undang-undang privasi yang terpakai.",
 	"tooltip_header_safe": "{0} ini belum disemak lagi.",
-	"tooltip_header_toggle_aria": "Togol pengepala padat",
 	"tooltip_header_unavailable": "Maklumat status tidak tersedia.",
 	"tooltip_header_unsafe_auto": "{0} ini telah disahkan secara automatik oleh sistem kami kerana tahap keterukan yang tinggi.",
 	"tooltip_header_unsafe_pre": "{0} ini telah disahkan tidak sesuai oleh ",

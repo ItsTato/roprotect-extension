@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Este {0} ha sido revisado por nuestro sistema y no tiene evidencia suficiente para ser marcado.",
 	"tooltip_header_redacted": "Esta cuenta fue marcada por violaciones graves. Las razones específicas y pruebas ya no se muestran en cumplimiento de las leyes de privacidad aplicables.",
 	"tooltip_header_safe": "Este {0} no ha sido revisado todavía.",
-	"tooltip_header_toggle_aria": "Alternar encabezado compacto",
 	"tooltip_header_unavailable": "Información de estado no disponible.",
 	"tooltip_header_unsafe_auto": "Este {0} ha sido auto-confirmado por nuestro sistema debido a alta severidad.",
 	"tooltip_header_unsafe_pre": "Este {0} ha sido verificado como inapropiado por ",

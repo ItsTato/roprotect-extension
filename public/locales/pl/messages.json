@@ -863,7 +863,6 @@
 	"tooltip_header_queued_safe": "Ten {0} został sprawdzony przez nasz system i nie ma wystarczających dowodów, aby go oznaczyć.",
 	"tooltip_header_redacted": "To konto zostało oznaczone za poważne naruszenia. Konkretne powody i dowody nie są już pokazywane zgodnie z obowiązującymi przepisami o ochronie prywatności.",
 	"tooltip_header_safe": "Ten {0} nie został jeszcze sprawdzony.",
-	"tooltip_header_toggle_aria": "Przełącz kompaktowy nagłówek",
 	"tooltip_header_unavailable": "Informacje o statusie niedostępne.",
 	"tooltip_header_unsafe_auto": "Ten {0} został automatycznie potwierdzony przez nasz system ze względu na wysoką wagę naruszenia.",
 	"tooltip_header_unsafe_pre": "Ten {0} został zweryfikowany jako nieodpowiedni przez ",

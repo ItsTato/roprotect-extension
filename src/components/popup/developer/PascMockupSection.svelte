@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PascDisplay from '@/components/status/PascDisplay.svelte';
 	import PascEditModal from '@/components/status/PascEditModal.svelte';
+	import Select from '@/components/ui/Select.svelte';
 	import {
 		MOCK_PASC_DISCORD_ACCOUNTS,
 		MOCK_PASC_RECORD,
@@ -16,6 +17,7 @@
 	// Delete this file (and its mount) once the real provider ships.
 
 	const LEVELS = Object.keys(PASC_ACCESS_RANK) as PascAccessLevel[];
+	const LEVEL_OPTIONS = LEVELS.map((level) => ({ value: level, label: level }));
 
 	let viewerLevel = $state<PascAccessLevel>('A2');
 	let editing = $state(false);
@@ -27,11 +29,7 @@
 <div class="pasc-mock-banner">
 	PASC MOCKUP — provider tab &amp; edit window preview (see T:\Python Projects\TLET\PASC\PASC.md).
 	Hardcoded English strings; real implementation needs i18n keys. Your clearance:
-	<select class="pasc-select" aria-label="Mock viewer access level" bind:value={viewerLevel}>
-		{#each LEVELS as level (level)}
-			<option value={level}>{level}</option>
-		{/each}
-	</select>
+	<Select ariaLabel="Mock viewer access level" options={LEVEL_OPTIONS} bind:value={viewerLevel} />
 	{#if canEdit}(edit button visible — M1+){/if}
 </div>
 

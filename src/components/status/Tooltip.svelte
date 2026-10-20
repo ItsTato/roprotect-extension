@@ -141,20 +141,19 @@
 	const effectiveTheme = themeManager.effectiveTheme;
 
 	const TOOLTIP_SIZE = {
-		MIN_WIDTH: 400,
-		MIN_HEIGHT: 350,
+		MIN_WIDTH: 580,
+		MIN_HEIGHT: 580,
 		MAX_WIDTH_RATIO: 0.9,
 		MAX_HEIGHT_RATIO: 0.9
 	} as const;
 
 	const PREVIEW_TOOLTIP_SIZE = {
-		MIN_WIDTH: 200,
-		MIN_HEIGHT: 150,
+		MIN_WIDTH: 300,
+		MIN_HEIGHT: 220,
 		MAX_WIDTH: 500,
 		MAX_HEIGHT: 600
 	} as const;
 
-	const COMPACT_HEADER_MIN_WIDTH = 450;
 	const MIN_EVIDENCE_DECODE_LENGTH = 20;
 
 	interface EvidenceDecodeEntry {
@@ -263,8 +262,6 @@
 	let resizeStartSize = $state<{ width: number; height: number } | null>(null);
 	let customWidth = $state<number | undefined>();
 	let customHeight = $state<number | undefined>();
-	let measuredCardWidth = $state<number | undefined>();
-	let headerCompact = $state(false);
 	let previewPositionFrame: number | null = null;
 
 	const engineVersionStatus = $derived.by(() => {
@@ -288,7 +285,14 @@
 			loading: result.loading,
 			error: !!result.error && !result.data,
 			noData: !result.loading && !result.error && !result.data,
-			landscapeImageDataUrl: result.landscapeImageDataUrl
+			// SIGMANET always uses the dedicated P mark, flipped against the
+			// active theme so it stays legible on the tab surface.
+			landscapeImageDataUrl:
+				apiId === 'system-scsn'
+					? $effectiveTheme === 'dark'
+						? getAssetUrl('/assets/SIGMANET-LIGHT-P.png')
+						: getAssetUrl('/assets/SIGMANET-DARK-P.png')
+					: result.landscapeImageDataUrl
 		}));
 		// MOCK ONLY — the PASC tab renders mock data until the backend reports
 		// system-pasc (see T:\Python Projects\TLET\PASC\PASC.md). Intentionally ungated: remove this entry
@@ -705,10 +709,6 @@
 		};
 	});
 
-	const showCompactColumns = $derived(
-		headerCompact && (measuredCardWidth ?? COMPACT_HEADER_MIN_WIDTH) >= COMPACT_HEADER_MIN_WIDTH
-	);
-
 	function getDecodedContent(content: string): string {
 		return evidenceEncodingMap.get(content)?.decoded ?? content;
 	}
@@ -990,17 +990,6 @@
 		}
 	}
 
-	function toggleHeaderCompact(event: MouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		headerCompact = !headerCompact;
-		updateSetting(SETTINGS_KEYS.EXPANDED_HEADER_HEIGHT, headerCompact ? 1 : 0).catch(
-			(error_: unknown) => {
-				logger.error('Failed to save header compact state:', error_);
-			}
-		);
-	}
-
 	function handleViewOutfits(event: MouseEvent) {
 		event.stopPropagation();
 		showOptionsMenu = false;
@@ -1228,7 +1217,6 @@
 		if (isExpanded) {
 			customWidth = $settings[SETTINGS_KEYS.EXPANDED_TOOLTIP_WIDTH];
 			customHeight = $settings[SETTINGS_KEYS.EXPANDED_TOOLTIP_HEIGHT];
-			headerCompact = !!$settings[SETTINGS_KEYS.EXPANDED_HEADER_HEIGHT];
 		} else {
 			customWidth = $settings[SETTINGS_KEYS.PREVIEW_TOOLTIP_WIDTH];
 			customHeight = $settings[SETTINGS_KEYS.PREVIEW_TOOLTIP_HEIGHT];
@@ -2069,7 +2057,6 @@
 					: undefined}
 				class="expanded-tooltip"
 				class:has-tabs={tabs.length > 1}
-				bind:clientWidth={measuredCardWidth}
 			>
 				<TooltipTabs onSelect={handleTabSelect} {tabs} bind:activeTab />
 
@@ -2169,12 +2156,14 @@
 										</OverlayPortal>
 									</div>
 									{#if activeUserStatus?.engineVersion}
-										<div class="tooltip-options-divider"></div>
-										<div class="tooltip-options-engine">
-											<span class="tooltip-options-engine-tag {engineVersionStatus}">
-												{activeUserStatus.engineVersion} ·
-												{$_(ENGINE_STATUS_KEY[engineVersionStatus])}
-											</span>
+										<div class="tooltip-options-engine-section">
+											<div class="tooltip-options-divider"></div>
+											<div class="tooltip-options-engine">
+												<span class="tooltip-options-engine-tag {engineVersionStatus}">
+													{activeUserStatus.engineVersion} ·
+													{$_(ENGINE_STATUS_KEY[engineVersionStatus])}
+												</span>
+											</div>
 										</div>
 									{/if}
 								</div>
@@ -2185,7 +2174,7 @@
 							<div
 								bind:this={profileHeaderRef}
 								class="tooltip-profile-header"
-								class:compact={headerCompact}
+								class:compact={isExpanded}
 							>
 								<div class="tooltip-avatar">
 									<img alt="" src={groupInfo.groupImageUrl} />
@@ -2205,7 +2194,7 @@
 										</div>
 									{/if}
 								</div>
-								<div class="tooltip-compact-header-right" class:is-visible={showCompactColumns}>
+								<div class="tooltip-compact-header-right" class:is-visible={isExpanded}>
 									{@render compactHeaderRight()}
 								</div>
 							</div>
@@ -2214,14 +2203,14 @@
 							<div
 								bind:this={profileHeaderRef}
 								class="tooltip-profile-header"
-								class:compact={headerCompact}
+								class:compact={isExpanded}
 							>
 								<div class="tooltip-avatar">
 									<img alt="" src={userInfo.avatarUrl} />
 								</div>
 								<div class="tooltip-user-info">
 									<div class="tooltip-username">
-										{#if showCompactColumns}
+										{#if isExpanded}
 											<CanvasText
 												text={userInfo.username
 													? `@${userInfo.username}`
@@ -2276,14 +2265,14 @@
 										{@render membershipBadgeSection()}
 									{/if}
 								</div>
-								<div class="tooltip-compact-header-right" class:is-visible={showCompactColumns}>
+								<div class="tooltip-compact-header-right" class:is-visible={isExpanded}>
 									{@render compactHeaderRight()}
 								</div>
 							</div>
 						{/if}
 
 						<!-- Header message and reviewer -->
-						<div class="tooltip-standard-header" class:is-hidden={showCompactColumns}>
+						<div class="tooltip-standard-header" class:is-hidden={isExpanded}>
 							{#if (userInfo || groupInfo) && (activeStatus || isNoData)}
 								<div class="tooltip-header">
 									<div class="header-message tooltip-header-message tooltip-header-message-canvas">
@@ -2293,14 +2282,6 @@
 							{/if}
 							{@render reviewerSection()}
 						</div>
-
-						<!-- Header Compact Toggle -->
-						<button
-							class="tooltip-header-toggle"
-							aria-label={$_('tooltip_header_toggle_aria')}
-							onclick={toggleHeaderCompact}
-							type="button"
-						></button>
 					</div>
 
 					<!-- Scrollable content -->
