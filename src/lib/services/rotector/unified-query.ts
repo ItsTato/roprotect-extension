@@ -279,12 +279,13 @@ export async function queryMultipleUsers(
 	const systemApis = enabledApis.filter(isSystemApi);
 	const customApisList = enabledApis.filter((api) => !isSystemApi(api));
 
-	// Tracks how many users each system provider has resolved, so callers can
-	// report per-provider progress while slower providers are still fetching.
-	const resolvedCounts = new Map<string, number>(systemApis.map((api) => [api.id, 0]));
+	// Tracks how many users each provider has resolved. Custom APIs are included
+	// so the scan denominator matches the work that actually gates completion;
+	// otherwise the bar sits near 95% while a slow custom API finishes.
+	const resolvedCounts = new Map<string, number>(enabledApis.map((api) => [api.id, 0]));
 	const resolvedKeys = new Set<string>();
 	const snapshotProviders = (): BatchProviderProgress[] =>
-		systemApis.map((api) => ({
+		enabledApis.map((api) => ({
 			apiId: api.id,
 			apiName: api.name,
 			logoUrl: api.landscapeImageDataUrl ?? '',

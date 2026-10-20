@@ -86,6 +86,9 @@
 	let cipherContainer: HTMLElement | null = null;
 	let friendsScanBarCleanup: (() => void) | null = null;
 	let groupsScanBarCleanup: (() => void) | null = null;
+	// Async setup continues across `await` points; once the controller tears the
+	// manager down, a late continuation must not mount components into a detached tree.
+	let destroyed = false;
 
 	function shouldBlurOutfit(status: CombinedStatus<UserStatus>): boolean {
 		for (const result of status.values()) {
@@ -132,6 +135,7 @@
 
 	async function initialize() {
 		await setupStatusIndicator();
+		if (destroyed) return;
 		setupHeaderCheck();
 
 		// Mark ready before async setup so blur marking and observers don't wait for initialize() to finish
@@ -195,6 +199,7 @@
 	async function setupStatusIndicator() {
 		try {
 			const titleResult = await waitForElement(PROFILE_SELECTORS.HEADER_TITLE);
+			if (destroyed) return;
 
 			if (!titleResult.success) {
 				logger.warn('Could not find profile header title container');
@@ -234,7 +239,7 @@
 	}
 
 	function mountStatusIndicator() {
-		if (!statusContainer || !userId) return;
+		if (!statusContainer || !userId || destroyed) return;
 
 		try {
 			if (statusComponent) void unmount(statusComponent);
@@ -261,7 +266,10 @@
 					skipAutoFetch: true,
 					suppressMembershipBadge: true,
 					onClick: handleStatusClick,
-					onQueue: handleQueueUser
+					onQueue: handleQueueUser,
+					// A PASC save/refresh changes the authoritative verdict; refetch so
+					// the profile warning and blur state follow it.
+					onStatusUpdate: () => querySubscription.refresh()
 				}
 			});
 		} catch (error) {
@@ -271,7 +279,7 @@
 
 	// Skips remount when the design signature is unchanged so resubscribing to userStatus does not flicker the pill
 	function mountMembershipPill(badge: NonNullable<typeof rotectorMembershipBadge>) {
-		if (!statusContainer) return;
+		if (!statusContainer || destroyed) return;
 
 		// Skip remount when design hasn't changed
 		const signature = `${String(badge.tier)}:${String(badge.badgeDesign)}:${String(badge.iconDesign)}:${String(badge.textDesign)}`;
@@ -368,6 +376,7 @@
 			const containerSelector = FRIENDS_CAROUSEL_SELECTORS.CONTAINER;
 
 			const result = await waitForElement(containerSelector);
+			if (destroyed) return;
 
 			if (result.success) {
 				showCarousel = true;
@@ -401,6 +410,7 @@
 			const result = await waitForElement(
 				`${PROFILE_GROUPS_SHOWCASE_SELECTORS.SECTION} ${PROFILE_GROUPS_SHOWCASE_SELECTORS.ITEM}`
 			);
+			if (destroyed) return;
 
 			if (result.success) {
 				showGroupsShowcase = true;
@@ -421,7 +431,7 @@
 
 		try {
 			const result = await waitForElement(FRIENDS_CAROUSEL_SELECTORS.HEADER);
-			if (!result.success) return;
+			if (destroyed || !result.success) return;
 
 			const heading = result.element.querySelector('h2');
 			if (!heading) return;
@@ -456,7 +466,7 @@
 				? BTROBLOX_GROUPS_SELECTORS.HEADER_TITLE
 				: PROFILE_GROUPS_SHOWCASE_SELECTORS.HEADER_TITLE;
 			const result = await waitForElement(headerSelector);
-			if (!result.success) return;
+			if (destroyed || !result.success) return;
 
 			const container = document.createElement('span');
 			container.className = COMPONENT_CLASSES.SCAN_HOST;
@@ -492,6 +502,7 @@
 
 		const { element: descEl } = await waitForElement(BLUR_SELECTORS.PROFILE_DESCRIPTION);
 
+		if (destroyed) return;
 		if (!descEl) {
 			logger.debug('No profile description found for cipher detection');
 			return;
@@ -527,7 +538,7 @@
 
 	// Re-injects the indicator only if the active visible header lacks one, guarded by isReinjecting to avoid concurrent rebuilds
 	async function checkAndReinject(): Promise<boolean> {
-		if (isReinjecting) return false;
+		if (isReinjecting || destroyed) return false;
 
 		const activeHeader = getActiveHeader();
 		if (!activeHeader) return false;
@@ -560,6 +571,7 @@
 			frameScheduled = true;
 			requestAnimationFrame(() => {
 				frameScheduled = false;
+				if (destroyed) return;
 				void checkAndReinject();
 			});
 		});
@@ -621,6 +633,7 @@
 	}
 
 	function cleanup() {
+		destroyed = true;
 		setProfileOutfitBlurState(null);
 		setProfileTextBlurState(null);
 

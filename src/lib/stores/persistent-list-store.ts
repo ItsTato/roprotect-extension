@@ -7,6 +7,9 @@ const FLUSH_DELAY_MS = 250;
 interface PersistentListStoreConfig {
 	storageKey: string;
 	maxEntries: number;
+	// Skip logger calls for the store's own failures. The developer log store sets this because
+	// logger.warn() writes back into it, so a failing save would re-queue itself every flush.
+	silentFailures?: boolean;
 }
 
 interface PersistentListStore<T> {
@@ -22,7 +25,10 @@ interface PersistentListStore<T> {
 export function createPersistentListStore<T>(
 	config: PersistentListStoreConfig
 ): PersistentListStore<T> {
-	const { storageKey, maxEntries } = config;
+	const { storageKey, maxEntries, silentFailures = false } = config;
+	const warn = (message: string, error: unknown): void => {
+		if (!silentFailures) logger.warn(message, error);
+	};
 	const store = writable<T[]>([]);
 	let writeQueue = Promise.resolve();
 
@@ -35,7 +41,7 @@ export function createPersistentListStore<T>(
 		try {
 			store.set(await getStorage<T[]>('local', storageKey, []));
 		} catch (error) {
-			logger.warn(`Failed to load ${storageKey}:`, error);
+			warn(`Failed to load ${storageKey}:`, error);
 			store.set([]);
 		}
 	}
@@ -45,7 +51,7 @@ export function createPersistentListStore<T>(
 			await setStorage('local', storageKey, entries);
 			store.set(entries);
 		} catch (error) {
-			logger.warn(`Failed to save ${storageKey}:`, error);
+			warn(`Failed to save ${storageKey}:`, error);
 		}
 	}
 
@@ -69,7 +75,7 @@ export function createPersistentListStore<T>(
 				const merged = [...batch.toReversed(), ...current].slice(0, maxEntries);
 				await save(merged);
 			} catch (error) {
-				logger.warn(`Failed to flush ${storageKey} batch:`, error);
+				warn(`Failed to flush ${storageKey} batch:`, error);
 			}
 		});
 		void writeQueue.then(() => resolver?.());

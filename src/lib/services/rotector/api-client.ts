@@ -1,6 +1,8 @@
-import { API_ACTIONS } from '../../types/constants';
+import { API_ACTIONS, PASC_FILE_LIMITS } from '../../types/constants';
 import type {
 	ApiResponse,
+	DiscordSignInPoll,
+	DiscordSignInStart,
 	ExportResult,
 	GroupStatus,
 	GroupTrackedUsersResponse,
@@ -19,7 +21,7 @@ import type {
 	UserStatus
 } from '../../types/api';
 import type { ApiUsage } from '../../types/usage';
-import type { PascAccessLevel } from '../../data/pasc-mock';
+import type { PascAccessLevel } from '../../data/pasc';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { getAbortError } from '../../utils/abort';
 import { buildResponseError } from '../../utils/api/api-error';
@@ -268,6 +270,13 @@ class RotectorApiClient {
 		contentType?: string,
 		access?: string
 	): Promise<PascFileDescriptor> {
+		// Check before base64 encoding: the expansion is what would blow the
+		// messaging limit (and briefly triple the file in memory).
+		if (bytes.byteLength > PASC_FILE_LIMITS.MAX_BYTES) {
+			throw new Error(
+				`File is too large (max ${String(PASC_FILE_LIMITS.MAX_BYTES / (1024 * 1024))} MB)`
+			);
+		}
 		return sendMessage<PascFileDescriptor>(API_ACTIONS.PASC_UPLOAD_FILE, {
 			userId,
 			filename,
@@ -344,6 +353,14 @@ class RotectorApiClient {
 			error: result.error
 		});
 		return result;
+	}
+
+	async startDiscordSignIn(): Promise<DiscordSignInStart> {
+		return sendMessage<DiscordSignInStart>(API_ACTIONS.OAUTH_START, {});
+	}
+
+	async pollDiscordSignIn(pair: string): Promise<DiscordSignInPoll> {
+		return sendMessage<DiscordSignInPoll>(API_ACTIONS.OAUTH_POLL, { pair });
 	}
 }
 

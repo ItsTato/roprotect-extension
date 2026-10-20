@@ -15,7 +15,6 @@ export type ExportMode = 'clipboard' | ExportFormat;
 const EXCLUDE_SELECTORS = [
 	'.tooltip-options-container',
 	'.tooltip-resize-handle',
-	'.tooltip-header-toggle',
 	'.cross-signal-indicator',
 	'.outfit-only-indicator',
 	'.source-info-indicator',

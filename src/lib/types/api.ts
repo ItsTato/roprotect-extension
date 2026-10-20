@@ -17,6 +17,8 @@ import type {
 	UserStatusSchema
 } from '../schemas/rotector';
 
+export type { DiscordSignInPoll, DiscordSignInReady, DiscordSignInStart } from '../schemas/oauth';
+
 export type ReviewerInfo = v.InferOutput<typeof ReviewerInfoSchema>;
 export type ReasonData = v.InferOutput<typeof ReasonSchema>;
 export type MembershipStatus = v.InferOutput<typeof MembershipStatusSchema>;

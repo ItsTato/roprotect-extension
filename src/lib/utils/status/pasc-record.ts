@@ -9,8 +9,9 @@ import {
 	type PascProviderVerdict,
 	type PascRecord,
 	type PascReferral
-} from '../../data/pasc-mock';
+} from '../../data/pasc';
 import { PASC_MISSING_BADGE, pickHighestSeveritySystemResult } from './status-utils';
+import { STATUS } from '../../types/constants';
 
 // Maps a real system-pasc lookup result onto the PASC tab view model.
 // Three outcomes (mirroring the proxy contract):
@@ -55,9 +56,18 @@ export function mapPascUserStatus(
 	identity: { userId: string; displayName: string | undefined; username: string | undefined }
 ): PascRecord | null {
 	const badges = data.badges ?? [];
-	if (badges.some((badge) => badge.text === PASC_MISSING_BADGE)) return null;
+	// Explicit proxy fields win; otherwise the miss marker is negative evidence.
+	// Ambiguous records are handled by isPascRecordPresent at the call site.
+	if (data.pascRecordPresent === false || data.pascMissing === true) return null;
+	if (
+		data.pascRecordPresent !== true &&
+		data.pascMissing === undefined &&
+		badges.some((badge) => badge.text === PASC_MISSING_BADGE)
+	) {
+		return null;
+	}
 
-	const flag = NUMERIC_TO_PASC_FLAG[data.flagType] ?? 'safe';
+	const flag = NUMERIC_TO_PASC_FLAG[data.flagType] ?? 'unknown';
 	const base = {
 		userId: identity.userId,
 		displayName: identity.displayName || identity.username || identity.userId,
@@ -122,8 +132,10 @@ export function liveProviderVerdicts(
 	for (const apiId of RELIED_UPON_ORDER) {
 		const data = combined.get(apiId)?.data;
 		if (!data) continue;
+		// An unknown verdict has nothing settled to show; never render it as SAFE.
+		if (data.flagType === STATUS.FLAGS.UNKNOWN) continue;
 		const flag = NUMERIC_TO_PASC_FLAG[data.flagType];
-		if (!flag) continue;
+		if (!flag || flag === 'unknown') continue;
 		rows.push({
 			provider: RELIED_UPON_LABELS[apiId],
 			flag,

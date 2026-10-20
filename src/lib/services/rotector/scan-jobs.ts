@@ -1,7 +1,7 @@
 import { fetchAllFriendIds } from '../roblox/friends';
 import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
-import { queryMultipleUsers, getEnabledCustomApis, isSystemApi } from './unified-query';
+import { queryMultipleUsers, getEnabledCustomApis } from './unified-query';
 import { getAssetUrl } from '../../utils/assets';
 import type { UserStatus } from '../../types/api';
 import type { CombinedStatus, CustomApiResult, CustomApiConfig } from '../../types/custom-api';
@@ -69,29 +69,14 @@ function sortProviders<T extends { apiId: string }>(providers: T[]): T[] {
 	return [...providers].toSorted((a, b) => orderOf(a.apiId) - orderOf(b.apiId));
 }
 
-// PASC always renders in the strip, whether or not whoami reports it: a
-// display-only entry that never enters the progress denominator.
-function withPascChip(providers: ScanProviderProgress[]): ScanProviderProgress[] {
-	if (providers.some((p) => p.apiId === 'system-pasc')) return providers;
-	return sortProviders([
-		...providers,
-		{
-			apiId: 'system-pasc',
-			apiName: 'PASC',
-			logoUrl: getAssetUrl('/assets/pasc-scan.png'),
-			fallbackLogoUrl: '',
-			resolved: 0
-		}
-	]);
-}
-
 // Zeroed readout for the friend-ID fetch phase (0→30%), so the provider strip
-// renders from the start instead of waiting for the first batch answer.
-// Always includes the PASC chip, even with no system provider accessible.
+// renders from the start instead of waiting for the first batch answer. Includes
+// every enabled API (system and custom) because the denominator counts them all;
+// PASC only appears when it is actually enabled.
 function buildZeroedDetail(total: number): ScanProgressDetail {
-	const systemApis = getEnabledCustomApis().filter(isSystemApi);
+	const apis = getEnabledCustomApis();
 	const providers = sortProviders(
-		systemApis.map((api) => ({
+		apis.map((api) => ({
 			apiId: api.id,
 			apiName: api.name,
 			logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[api.id] ?? api.landscapeImageDataUrl ?? '',
@@ -99,7 +84,7 @@ function buildZeroedDetail(total: number): ScanProgressDetail {
 			resolved: 0
 		}))
 	);
-	return { total, providers: withPascChip(providers) };
+	return { total, providers };
 }
 
 function flagToCategory(flagType: number): ScanCategory {
@@ -233,8 +218,8 @@ export async function scanFriendsForUser(
 
 				// Advance on ANY provider's answers, not just fully-resolved friends:
 				// holding the bar until the slowest provider finishes its first chunk
-				// is what pinned it at 30%. System providers report per-provider counts;
-				// with none accessible (custom-only), fall back to per-friend completion.
+				// is what pinned it at 30%. System and custom providers both report
+				// per-provider counts; the per-friend fallback is only a safety net.
 				if (providers.length === 0) {
 					const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
 					onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));
@@ -246,15 +231,13 @@ export async function scanFriendsForUser(
 					(resolvedSum / (total * providers.length)) * SCAN_PHASE_CHECK_RANGE;
 				const detail: ScanProgressDetail = {
 					total,
-					providers: withPascChip(
-						sortProviders(providers).map((p) => ({
-							apiId: p.apiId,
-							apiName: p.apiName,
-							logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
-							fallbackLogoUrl: p.logoUrl,
-							resolved: p.resolved
-						}))
-					)
+					providers: sortProviders(providers).map((p) => ({
+						apiId: p.apiId,
+						apiName: p.apiName,
+						logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
+						fallbackLogoUrl: p.logoUrl,
+						resolved: p.resolved
+					}))
 				};
 				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), detail);
 			}
