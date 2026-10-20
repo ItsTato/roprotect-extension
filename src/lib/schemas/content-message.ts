@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { API_ACTIONS, CAPTCHA_MESSAGES } from '@/lib/types/constants';
+import { API_ACTIONS, CAPTCHA_MESSAGES, PASC_FILE_LIMITS } from '@/lib/types/constants';
 import { PersistedCustomApiSchema } from './custom-api';
 
 const UserId = v.union([v.string(), v.number()]);
@@ -34,6 +34,15 @@ const ContentMessageSchema = v.variant('action', [
 	v.object({
 		action: v.literal(API_ACTIONS.API_WHOAMI),
 		apiKey: v.string(),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.OAUTH_START),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.OAUTH_POLL),
+		pair: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 		clientId: ClientId
 	}),
 	v.object({
@@ -155,6 +164,69 @@ const ContentMessageSchema = v.variant('action', [
 	v.object({
 		action: v.literal(API_ACTIONS.GET_DISCORD_AVATARS),
 		discordUserIds: v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(100)),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.GET_PASC_CLEARANCE),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_UPSERT_RECORD),
+		userId: UserId,
+		record: v.record(v.string(), v.unknown()),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_UPLOAD_FILE),
+		userId: UserId,
+		filename: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		contentType: v.optional(
+			v.pipe(v.string(), v.maxLength(PASC_FILE_LIMITS.MAX_CONTENT_TYPE_LENGTH))
+		),
+		access: v.optional(v.picklist(['0', 'A1', 'A2', 'M1', 'M2'])),
+		// Base64, not ArrayBuffer: extension messaging JSON-serializes the
+		// payload, so an ArrayBuffer arrives as a plain Object and fails
+		// `v.instance(ArrayBuffer)`. The sender encodes, background decodes.
+		// The length cap is the base64 expansion of the byte cap, so an
+		// oversized file is rejected before the background allocates it.
+		bytesBase64: v.pipe(
+			v.string(),
+			v.minLength(1),
+			v.maxLength(PASC_FILE_LIMITS.MAX_BASE64_LENGTH)
+		),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_DOWNLOAD_FILE),
+		userId: UserId,
+		fileId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_DELETE_FILE),
+		userId: UserId,
+		fileId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.PASC_REQUEST_REVIEW),
+		userId: UserId,
+		kind: v.picklist(['report', 'recheck']),
+		comment: v.optional(v.pipe(v.string(), v.maxLength(280))),
+		displayName: v.optional(v.pipe(v.string(), v.maxLength(128))),
+		username: v.optional(v.pipe(v.string(), v.maxLength(128))),
+		flag: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		referralProvider: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		referralFlag: v.optional(v.pipe(v.string(), v.maxLength(32))),
+		verdicts: v.optional(
+			v.array(
+				v.object({
+					provider: v.pipe(v.string(), v.maxLength(32)),
+					flag: v.pipe(v.string(), v.maxLength(32)),
+					detail: v.pipe(v.string(), v.maxLength(256))
+				})
+			)
+		),
 		clientId: ClientId
 	})
 ]);

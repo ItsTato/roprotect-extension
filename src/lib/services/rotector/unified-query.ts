@@ -16,6 +16,7 @@ import { API_CONFIG, LOOKUP_CONTEXT, STATUS } from '../../types/constants';
 import { SETTINGS_KEYS } from '../../types/settings';
 import {
 	isActionableResult,
+	isPascRecordPresent,
 	pickHighestSeveritySystemResult
 } from '../../utils/status/status-utils';
 import { get } from 'svelte/store';
@@ -23,10 +24,49 @@ import { get } from 'svelte/store';
 interface QueryMultipleUsersOptions {
 	lookupContext?: string | undefined;
 	signal?: AbortSignal | undefined;
-	onUpdate?: ((userId: string, status: CombinedStatus<UserStatus>) => void) | undefined;
+	onUpdate?:
+		| ((
+				userId: string,
+				status: CombinedStatus<UserStatus>,
+				providers: BatchProviderProgress[]
+		  ) => void)
+		| undefined;
 }
 
-const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase'] as const;
+// Per-provider resolution counts for batch queries, so progress UI can advance
+// as each provider answers instead of waiting for the slowest one.
+export interface BatchProviderProgress {
+	apiId: string;
+	apiName: string;
+	logoUrl: string;
+	resolved: number;
+	total: number;
+}
+
+const SYSTEM_API_IDS = ['system-scsn', 'system-rab', 'system-tase', 'system-pasc'] as const;
+
+// SCSN answers slowly, so split it into smaller chunks: the first answers land
+// sooner (progress keeps moving) and less work is lost when a chunk times out.
+// PASC caps batches at 25 server-side, so it chunks the same way.
+const SYSTEM_API_BATCH_SIZES: Record<string, number> = {
+	'system-scsn': 25,
+	'system-tase': 25,
+	'system-pasc': 25
+};
+
+function batchSizeFor(api: CustomApiConfig): number {
+	return SYSTEM_API_BATCH_SIZES[api.id] ?? API_CONFIG.BATCH_SIZE;
+}
+
+const SYSTEM_API_BATCH_DELAYS: Record<string, number> = {
+	'system-scsn': 50,
+	'system-tase': 50,
+	'system-pasc': 50
+};
+
+function batchDelayFor(api: CustomApiConfig): number {
+	return SYSTEM_API_BATCH_DELAYS[api.id] ?? API_CONFIG.BATCH_DELAY;
+}
 
 function shouldBlockLookup(userId: string): boolean {
 	const { isRestricted } = get(restrictedAccessStore);
@@ -108,7 +148,7 @@ export function queryUserProgressive(
 	);
 	onUpdate(new Map(apiResults));
 
-	enabledApis.forEach(async (api) => {
+	const runApi = async (api: CustomApiConfig): Promise<void> => {
 		const apiSignal = AbortSignal.any([
 			controller.signal,
 			AbortSignal.timeout(API_CONFIG.PROGRESSIVE_API_TIMEOUT)
@@ -139,6 +179,12 @@ export function queryUserProgressive(
 			});
 			onUpdate(new Map(apiResults));
 		}
+	};
+
+	// PASC reads are local (stored record or instant miss), so every provider
+	// fires in parallel — nothing waits on anything else.
+	enabledApis.forEach((api) => {
+		void runApi(api);
 	});
 
 	return () => {
@@ -222,19 +268,49 @@ export async function queryMultipleUsers(
 			timestamp: Date.now(),
 			landscapeImageDataUrl: api.landscapeImageDataUrl
 		});
-		onUpdate?.(userId, new Map(combined));
+		const resolveKey = `${api.id}:${userId}`;
+		if (!resolvedKeys.has(resolveKey)) {
+			resolvedKeys.add(resolveKey);
+			resolvedCounts.set(api.id, (resolvedCounts.get(api.id) ?? 0) + 1);
+		}
+		onUpdate?.(userId, new Map(combined), snapshotProviders());
 	};
 
 	const systemApis = enabledApis.filter(isSystemApi);
 	const customApisList = enabledApis.filter((api) => !isSystemApi(api));
+
+	// Tracks how many users each provider has resolved. Custom APIs are included
+	// so the scan denominator matches the work that actually gates completion;
+	// otherwise the bar sits near 95% while a slow custom API finishes.
+	const resolvedCounts = new Map<string, number>(enabledApis.map((api) => [api.id, 0]));
+	const resolvedKeys = new Set<string>();
+	const snapshotProviders = (): BatchProviderProgress[] =>
+		enabledApis.map((api) => ({
+			apiId: api.id,
+			apiName: api.name,
+			logoUrl: api.landscapeImageDataUrl ?? '',
+			resolved: resolvedCounts.get(api.id) ?? 0,
+			total: userIds.length
+		}));
 
 	// A batch response omits users the upstream has no record of. Left unset, that entry
 	// would carry neither data nor error with loading already false, which is
 	// indistinguishable from a request still in flight and leaves the UI on "Checking..."
 	// forever. The single-lookup endpoint reports those same users as flagType SAFE, so
 	// mirror that rather than inventing an error.
-	const resolveBatchEntry = (userId: string, userStatus: UserStatus | undefined): UserStatus =>
-		userStatus ?? parseUserStatus({ id: Number.parseInt(userId, 10), flagType: STATUS.FLAGS.SAFE });
+	// PASC is the exception: an omission means "no record", which must render the
+	// referral and must never override — so no data is synthesized at all.
+	const resolveBatchEntry = (
+		userId: string,
+		api: CustomApiConfig,
+		userStatus: UserStatus | undefined
+	): { data?: UserStatus } => {
+		if (userStatus) return { data: userStatus };
+		if (api.id === 'system-pasc') return {};
+		return {
+			data: parseUserStatus({ id: Number.parseInt(userId, 10), flagType: STATUS.FLAGS.SAFE })
+		};
+	};
 
 	logger.debug('Unified batch query starting:', {
 		userCount: userIds.length,
@@ -246,51 +322,53 @@ export async function queryMultipleUsers(
 	const systemPromise = (async () => {
 		if (systemApis.length === 0) return;
 
-		// Fire each system provider's batched fetch in parallel. Requests within
-		// the same provider remain sequential via chunking + BATCH_DELAY.
-		await Promise.all(
-			systemApis.map(async (api) => {
-				const toFetch: string[] = [];
-				for (const userId of userIds) {
-					toFetch.push(userId);
-				}
-				if (toFetch.length === 0) return;
+		const fetchSystemApi = async (api: CustomApiConfig): Promise<void> => {
+			const toFetch: string[] = [];
+			for (const userId of userIds) {
+				toFetch.push(userId);
+			}
+			if (toFetch.length === 0) return;
 
-				const processChunk = async (chunk: string[]): Promise<void> => {
-					try {
-						const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
-							apiConfig: api,
-							signal,
-							lookupContext
-						});
-						if (signal?.aborted) return;
-						const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
-						for (const userId of chunk) {
-							setApiResult(userId, api, { data: resolveBatchEntry(userId, userMap.get(userId)) });
-						}
-					} catch (error) {
-						if (signal?.aborted) return;
-						const errorMessage = asApiError(error).message;
-						for (const userId of chunk) {
-							setApiResult(userId, api, { error: errorMessage });
-						}
-						logger.error('System API batch error:', {
-							apiId: api.id,
-							apiName: api.name,
-							chunkSize: chunk.length,
-							error: errorMessage
-						});
+			const processChunk = async (chunk: string[]): Promise<void> => {
+				try {
+					const apiStatuses = await apiClient.checkMultipleUsers(chunk, {
+						apiConfig: api,
+						signal,
+						lookupContext
+					});
+					if (signal?.aborted) return;
+					const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
+					for (const userId of chunk) {
+						setApiResult(userId, api, resolveBatchEntry(userId, api, userMap.get(userId)));
 					}
-				};
-
-				const chunks = chunkArray(toFetch, API_CONFIG.BATCH_SIZE);
-				for (const [i, chunk] of chunks.entries()) {
-					if (i > 0) await abortableSleep(API_CONFIG.BATCH_DELAY, signal);
-					if (signal?.aborted) throw getAbortError(signal);
-					await processChunk(chunk);
+				} catch (error) {
+					if (signal?.aborted) return;
+					const errorMessage = asApiError(error).message;
+					for (const userId of chunk) {
+						setApiResult(userId, api, { error: errorMessage });
+					}
+					logger.error('System API batch error:', {
+						apiId: api.id,
+						apiName: api.name,
+						chunkSize: chunk.length,
+						error: errorMessage
+					});
 				}
-			})
-		);
+			};
+
+			const chunks = chunkArray(toFetch, batchSizeFor(api));
+			for (const [i, chunk] of chunks.entries()) {
+				if (i > 0) await abortableSleep(batchDelayFor(api), signal);
+				if (signal?.aborted) throw getAbortError(signal);
+				await processChunk(chunk);
+			}
+		};
+
+		// Fire each system provider's batched fetch in parallel. Requests within
+		// the same provider remain sequential via chunking + BATCH_DELAY. PASC
+		// reads are local (stored record or instant miss), so it runs with the
+		// rest — nothing waits on anything else.
+		await Promise.all(systemApis.map((api) => fetchSystemApi(api)));
 	})();
 
 	const customPromise = (async () => {
@@ -313,9 +391,7 @@ export async function queryMultipleUsers(
 						if (signal?.aborted) return;
 						const userMap = new Map(apiStatuses.map((s) => [s.id.toString(), s]));
 						for (const userId of chunk) {
-							setApiResult(userId, api, {
-								data: resolveBatchEntry(userId, userMap.get(userId))
-							});
+							setApiResult(userId, api, resolveBatchEntry(userId, api, userMap.get(userId)));
 						}
 					} catch (error) {
 						if (signal?.aborted) return;
@@ -365,6 +441,13 @@ export function pickDefaultTab<T extends UserStatus | GroupStatus>(
 	preferred: string | undefined
 ): string | null {
 	if (preferred && combined.has(preferred)) return preferred;
+
+	// PASC override decides the tab alone: a present record replaces every other
+	// verdict, so there is no reason to wait for slower providers to settle.
+	const pascResult = combined.get('system-pasc');
+	if (pascResult && !pascResult.loading && !pascResult.error && isPascRecordPresent(pascResult)) {
+		return 'system-pasc';
+	}
 
 	const values = [...combined.values()];
 	const allSettled = values.every((result) => !result.loading);

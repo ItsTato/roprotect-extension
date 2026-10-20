@@ -189,12 +189,12 @@
 	{/if}
 
 	<!-- Page Content -->
-	<div class="page-content">
+	<div class="rotector-page-content">
 		{#if currentPage !== null}
 			{#if currentPage === 'stats'}
 				<StatsPage />
 			{:else if currentPage === 'settings'}
-				<div class="settings-page">
+				<div class="rotector-settings-page">
 					<SettingsSection
 						onNavigateToCustomApis={openCustomApisOptionsPage}
 						onNavigateToMembership={openMembershipOptionsPage}

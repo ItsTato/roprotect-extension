@@ -14,14 +14,15 @@
 	import type { ReviewerInfo, UserStatus, ApiResponse } from '@/lib/types/api';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { extractErrorMessage, sanitizeEntityId } from '@/lib/utils/dom/sanitizer';
-	import { calculateStatusBadges } from '@/lib/utils/status/status-utils';
+	import { calculateStatusBadges, isPascRecordPresent } from '@/lib/utils/status/status-utils';
 	import { ENGINE_STATUS_BY_COMPAT, ENGINE_STATUS_KEY } from '@/lib/utils/status/engine-status';
 	import {
 		outfitSnapshotService,
 		type SnapshotKey,
 		type SnapshotMaps
 	} from '@/lib/services/rotector/outfit-snapshot';
-	import { pickDefaultTab } from '@/lib/services/rotector/unified-query';
+	import { pickDefaultTab, getEnabledCustomApis } from '@/lib/services/rotector/unified-query';
+	import { apiClient } from '@/lib/services/rotector/api-client';
 	import {
 		getRotectorMembershipBadge,
 		getRotectorOutfitEvidence
@@ -36,6 +37,21 @@
 	} from '@/lib/utils/status/violation-formatter';
 	import type { TaseUserRecord, DiscordAvatar } from '@/lib/schemas/custom-api';
 	import TaseV2Display from './TaseV2Display.svelte';
+	// Live PASC wiring (real lookup data mapped onto the tab view model).
+	import PascDisplay from './PascDisplay.svelte';
+	import PascEditModal from './PascEditModal.svelte';
+	import {
+		liveProviderVerdicts,
+		mapPascUserStatus,
+		pickLivePascReferral
+	} from '@/lib/utils/status/pasc-record';
+	import {
+		ensurePascClearance,
+		pascCanEdit,
+		pascViewerLevel as pascClearanceLevel
+	} from '@/lib/stores/pasc-clearance';
+	import { PASC_FLAG_TO_NUMERIC, type PascDiscordAccount, type PascRecord } from '@/lib/data/pasc';
+	import { getAssetUrl } from '@/lib/utils/assets';
 	import {
 		detectPageContext,
 		extractGroupInfo,
@@ -117,20 +133,19 @@
 	const effectiveTheme = themeManager.effectiveTheme;
 
 	const TOOLTIP_SIZE = {
-		MIN_WIDTH: 400,
-		MIN_HEIGHT: 350,
+		MIN_WIDTH: 580,
+		MIN_HEIGHT: 580,
 		MAX_WIDTH_RATIO: 0.9,
 		MAX_HEIGHT_RATIO: 0.9
 	} as const;
 
 	const PREVIEW_TOOLTIP_SIZE = {
-		MIN_WIDTH: 200,
-		MIN_HEIGHT: 150,
+		MIN_WIDTH: 300,
+		MIN_HEIGHT: 220,
 		MAX_WIDTH: 500,
 		MAX_HEIGHT: 600
 	} as const;
 
-	const COMPACT_HEADER_MIN_WIDTH = 450;
 	const MIN_EVIDENCE_DECODE_LENGTH = 20;
 
 	interface EvidenceDecodeEntry {
@@ -154,6 +169,9 @@
 		userUsername?: string | undefined;
 		userDisplayName?: string | undefined;
 		userAvatarUrl?: string | undefined;
+		// Let the owning page/list propagate a PASC save or refresh to the combined
+		// status it passed in, so indicators and warnings do not stay stale.
+		onStatusUpdate?: ((status: UserStatus) => void) | undefined;
 	}
 
 	interface HeaderMessage {
@@ -181,7 +199,8 @@
 		onMouseLeave,
 		userUsername,
 		userDisplayName,
-		userAvatarUrl
+		userAvatarUrl,
+		onStatusUpdate
 	}: Props = $props();
 
 	let tooltipRef = $state<HTMLElement>();
@@ -239,8 +258,6 @@
 	let resizeStartSize = $state<{ width: number; height: number } | null>(null);
 	let customWidth = $state<number | undefined>();
 	let customHeight = $state<number | undefined>();
-	let measuredCardWidth = $state<number | undefined>();
-	let headerCompact = $state(false);
 	let previewPositionFrame: number | null = null;
 
 	const engineVersionStatus = $derived.by(() => {
@@ -258,15 +275,150 @@
 	const tabs = $derived.by(() => {
 		if (!userStatus) return [];
 
-		return Array.from(userStatus.entries(), ([apiId, result]) => ({
+		const entries = Array.from(userStatus.entries(), ([apiId, result]) => ({
 			id: apiId,
 			name: result.apiName,
 			loading: result.loading,
 			error: !!result.error && !result.data,
 			noData: !result.loading && !result.error && !result.data,
-			landscapeImageDataUrl: result.landscapeImageDataUrl
+			// SIGMANET always uses the dedicated P mark, flipped against the
+			// active theme so it stays legible on the tab surface.
+			landscapeImageDataUrl:
+				apiId === 'system-scsn'
+					? $effectiveTheme === 'dark'
+						? getAssetUrl('/assets/SIGMANET-LIGHT-P.png')
+						: getAssetUrl('/assets/SIGMANET-DARK-P.png')
+					: result.landscapeImageDataUrl
 		}));
+		return entries;
 	});
+
+	// PASC is a real provider tab only when whoami reports system-pasc. Without
+	// the provider there is no tab: the absence of data must never be filled
+	// with a mock verdict.
+	let pascEditing = $state(false);
+
+	const pascLive = $derived(userStatus?.has('system-pasc') ?? false);
+	const pascResult = $derived(userStatus?.get('system-pasc') ?? null);
+
+	const pascDisplayRecord = $derived.by((): PascRecord | null => {
+		// A saved/refreshed result wins so the tab reflects writes immediately.
+		// A live lookup only counts when it actually carries a record; a miss
+		// (even one whose marker wording changed) must render the referral.
+		const data =
+			pascSavedStatus ??
+			(isGroup || !isPascRecordPresent(pascResult)
+				? undefined
+				: (pascResult?.data as UserStatus | undefined));
+		if (!data) return null;
+		const mapped = mapPascUserStatus(data, {
+			userId: sanitizedUserId,
+			displayName: userDisplayName ?? userInfo?.displayName,
+			username: userUsername ?? userInfo?.username
+		});
+		if (!mapped) return null;
+		return {
+			...mapped,
+			providerVerdicts: liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)
+		};
+	});
+
+	const pascReferral = $derived.by(() => {
+		if (!pascLive || isGroup || pascDisplayRecord) return null;
+		return pickLivePascReferral(userStatus as CombinedStatus<UserStatus>);
+	});
+
+	// Creation draft for M1+ viewers when no record exists: blank shell preset
+	// from the referral verdict at the viewer's own level. Below M1 this stays
+	// null and the tab remains referral-only.
+	const pascDraft = $derived.by((): PascRecord | null => {
+		if (!pascLive || isGroup || pascDisplayRecord) return null;
+		if (!$pascCanEdit) return null;
+		return {
+			userId: sanitizedUserId,
+			displayName: userDisplayName ?? userInfo?.displayName ?? sanitizedUserId,
+			username: userUsername ?? userInfo?.username ?? sanitizedUserId,
+			flag: pascReferral?.flag ?? 'safe',
+			accessLevel: $pascClearanceLevel,
+			reviewer: '',
+			updatedAt: '',
+			publicNote: '',
+			internalReview: '',
+			internalReviewMinLevel: 'M1',
+			files: [],
+			providerVerdicts: liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)
+		};
+	});
+
+	const pascDiscordAccounts = $derived.by((): PascDiscordAccount[] => {
+		if (!taseV2Record) return [];
+		return Object.entries(taseV2Record.detections).map(([discordId, account]) => {
+			const avatar = taseAvatars[discordId];
+			const fallback = avatar?.globalName || avatar?.username || discordId;
+			return {
+				id: discordId,
+				username: avatar?.username || discordId,
+				globalName: avatar?.globalName || fallback,
+				avatarDataUrl: avatar?.avatarDataUrl ?? null,
+				serverCount: account.detectedGuilds.length,
+				servers: account.detectedGuilds.map((guild) => ({
+					id: guild.guildId,
+					name: guild.guildName || guild.guildId,
+					flagType: guild.flag_type
+				}))
+			};
+		});
+	});
+
+	const pascHeaderBadge = $derived.by(() => {
+		// Drive the header from the same record the tab renders, not the raw
+		// lookup result: after a save/refresh the old result is stale.
+		if (pascDisplayRecord) {
+			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[pascDisplayRecord.flag]];
+			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
+		}
+		const referral = pascReferral;
+		if (referral) {
+			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[referral.flag]];
+			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
+		}
+		return null;
+	});
+
+	$effect(() => {
+		if (userStatus?.has('system-pasc')) void ensurePascClearance();
+	});
+
+	// Latest saved PASC state for this user: the upsert response arrives in
+	// lookup shape, so the tab updates instantly without waiting for a refetch.
+	// Cleared whenever the tooltip moves to another user.
+	let pascSavedStatus = $state<UserStatus | null>(null);
+
+	$effect(() => {
+		void userId;
+		pascSavedStatus = null;
+		// A tooltip instance can be reused across users; never carry an open
+		// editor (with its per-record draft state) to the next user.
+		pascEditing = false;
+	});
+
+	async function refreshPasc() {
+		const api = getEnabledCustomApis().find((entry) => entry.id === 'system-pasc');
+		if (!api) return;
+		try {
+			const status = await apiClient.checkUser(sanitizedUserId, { apiConfig: api });
+			pascSavedStatus = status;
+			onStatusUpdate?.(status);
+		} catch (error) {
+			logger.warn('[PASC] Refresh after write failed:', error);
+		}
+	}
+
+	function handlePascSaved(status: UserStatus) {
+		pascSavedStatus = status;
+		pascEditing = false;
+		onStatusUpdate?.(status);
+	}
 
 	$effect(() => {
 		if (!userStatus) return;
@@ -546,10 +698,6 @@
 					: undefined
 		};
 	});
-
-	const showCompactColumns = $derived(
-		headerCompact && (measuredCardWidth ?? COMPACT_HEADER_MIN_WIDTH) >= COMPACT_HEADER_MIN_WIDTH
-	);
 
 	function getDecodedContent(content: string): string {
 		return evidenceEncodingMap.get(content)?.decoded ?? content;
@@ -832,17 +980,6 @@
 		}
 	}
 
-	function toggleHeaderCompact(event: MouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		headerCompact = !headerCompact;
-		updateSetting(SETTINGS_KEYS.EXPANDED_HEADER_HEIGHT, headerCompact ? 1 : 0).catch(
-			(error_: unknown) => {
-				logger.error('Failed to save header compact state:', error_);
-			}
-		);
-	}
-
 	function handleViewOutfits(event: MouseEvent) {
 		event.stopPropagation();
 		showOptionsMenu = false;
@@ -1070,7 +1207,6 @@
 		if (isExpanded) {
 			customWidth = $settings[SETTINGS_KEYS.EXPANDED_TOOLTIP_WIDTH];
 			customHeight = $settings[SETTINGS_KEYS.EXPANDED_TOOLTIP_HEIGHT];
-			headerCompact = !!$settings[SETTINGS_KEYS.EXPANDED_HEADER_HEIGHT];
 		} else {
 			customWidth = $settings[SETTINGS_KEYS.PREVIEW_TOOLTIP_WIDTH];
 			customHeight = $settings[SETTINGS_KEYS.PREVIEW_TOOLTIP_HEIGHT];
@@ -1103,14 +1239,20 @@
 	});
 
 	$effect(() => {
-		// Fetch TASE V2 data when on the TASE tab and we have a user status with detections
-		if (activeTab !== 'system-tase' || !activeUserStatus || isGroup) return;
-		if (!('detections' in activeUserStatus) || !activeUserStatus.detections) return;
+		// Fetch TASE V2 data when on the TASE tab — or the PASC tab, whose right
+		// column reuses the same account cards — and the combined status holds
+		// a v2 TASE record with detections. v2 keeps scanned-clean accounts
+		// (empty detectedGuilds), so every linked account renders, not just
+		// flagged ones.
+		if ((activeTab !== 'system-tase' && activeTab !== 'system-pasc') || !userStatus || isGroup)
+			return;
+		const taseData = userStatus.get('system-tase')?.data;
+		if (!taseData || !('detections' in taseData) || !taseData.detections) return;
 
 		const loadId = ++latestTaseV2LoadId;
 		async function fetchTaseV2Data() {
 			try {
-				const taseRecord = activeUserStatus as unknown as TaseUserRecord;
+				const taseRecord = taseData as unknown as TaseUserRecord;
 				if (loadId !== latestTaseV2LoadId) return;
 				taseV2Record = taseRecord;
 
@@ -1385,6 +1527,69 @@
 		<div class="error-details">
 			{extractErrorMessage(activeError)}
 		</div>
+	{:else if activeTab === 'system-pasc'}
+		{#if pascResult?.loading}
+			<div class="flex items-center justify-center gap-2 py-2">
+				<LoadingSpinner size="small" />
+				<span class="text-xs">{$_('tooltip_loading_user_info')}</span>
+			</div>
+		{:else if pascDisplayRecord}
+			<PascDisplay
+				canEdit={$pascCanEdit && pascDisplayRecord.accessLevel !== null}
+				discordAccounts={pascDiscordAccounts}
+				onEdit={() => (pascEditing = true)}
+				onRefresh={refreshPasc}
+				record={pascDisplayRecord}
+				requestsEnabled
+				userId={sanitizedUserId}
+				viewerLevel={$pascClearanceLevel}
+			/>
+			{#if pascEditing && pascDisplayRecord.accessLevel !== null}
+				<div
+					class="modal-overlay visible"
+					onclick={(event) => event.stopPropagation()}
+					role="presentation"
+				>
+					<PascEditModal
+						mode="edit"
+						onClose={() => (pascEditing = false)}
+						onRefresh={refreshPasc}
+						onSaved={handlePascSaved}
+						record={pascDisplayRecord}
+					/>
+				</div>
+			{/if}
+		{:else}
+			<PascDisplay
+				canEdit={$pascCanEdit}
+				discordAccounts={pascDiscordAccounts}
+				displayName={userDisplayName ?? userInfo?.displayName}
+				draftRecord={pascDraft}
+				onEdit={() => (pascEditing = true)}
+				providerVerdicts={liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)}
+				record={null}
+				referral={pascReferral}
+				requestsEnabled
+				userId={sanitizedUserId}
+				username={userUsername ?? userInfo?.username}
+				viewerLevel={$pascClearanceLevel}
+			/>
+			{#if pascEditing && pascDraft}
+				<div
+					class="modal-overlay visible"
+					onclick={(event) => event.stopPropagation()}
+					role="presentation"
+				>
+					<PascEditModal
+						mode="create"
+						onClose={() => (pascEditing = false)}
+						onRefresh={refreshPasc}
+						onSaved={handlePascSaved}
+						record={pascDraft}
+					/>
+				</div>
+			{/if}
+		{/if}
 	{:else if activeLoading || !userStatus}
 		<div class="flex items-center justify-center gap-2 py-2">
 			<LoadingSpinner size="small" />
@@ -1801,7 +2006,6 @@
 					: undefined}
 				class="expanded-tooltip"
 				class:has-tabs={tabs.length > 1}
-				bind:clientWidth={measuredCardWidth}
 			>
 				<TooltipTabs onSelect={handleTabSelect} {tabs} bind:activeTab />
 
@@ -1901,12 +2105,14 @@
 										</OverlayPortal>
 									</div>
 									{#if activeUserStatus?.engineVersion}
-										<div class="tooltip-options-divider"></div>
-										<div class="tooltip-options-engine">
-											<span class="tooltip-options-engine-tag {engineVersionStatus}">
-												{activeUserStatus.engineVersion} ·
-												{$_(ENGINE_STATUS_KEY[engineVersionStatus])}
-											</span>
+										<div class="tooltip-options-engine-section">
+											<div class="tooltip-options-divider"></div>
+											<div class="tooltip-options-engine">
+												<span class="tooltip-options-engine-tag {engineVersionStatus}">
+													{activeUserStatus.engineVersion} ·
+													{$_(ENGINE_STATUS_KEY[engineVersionStatus])}
+												</span>
+											</div>
 										</div>
 									{/if}
 								</div>
@@ -1917,7 +2123,7 @@
 							<div
 								bind:this={profileHeaderRef}
 								class="tooltip-profile-header"
-								class:compact={headerCompact}
+								class:compact={isExpanded}
 							>
 								<div class="tooltip-avatar">
 									<img alt="" src={groupInfo.groupImageUrl} />
@@ -1937,7 +2143,7 @@
 										</div>
 									{/if}
 								</div>
-								<div class="tooltip-compact-header-right" class:is-visible={showCompactColumns}>
+								<div class="tooltip-compact-header-right" class:is-visible={isExpanded}>
 									{@render compactHeaderRight()}
 								</div>
 							</div>
@@ -1946,14 +2152,14 @@
 							<div
 								bind:this={profileHeaderRef}
 								class="tooltip-profile-header"
-								class:compact={headerCompact}
+								class:compact={isExpanded}
 							>
 								<div class="tooltip-avatar">
 									<img alt="" src={userInfo.avatarUrl} />
 								</div>
 								<div class="tooltip-user-info">
 									<div class="tooltip-username">
-										{#if showCompactColumns}
+										{#if isExpanded}
 											<CanvasText
 												text={userInfo.username
 													? `@${userInfo.username}`
@@ -1975,7 +2181,20 @@
 										{$_('tooltip_profile_id')}
 										{sanitizedUserId}
 									</div>
-									{#if !effectivelyRestricted && !activeError && activeStatus}
+									{#if activeTab === 'system-pasc'}
+										<!-- Same badge component as the other provider tabs, driven by
+										     the live PASC verdict (or the referral while there is no
+										     record). -->
+										{@const headerBadge = pascHeaderBadge}
+										{#if headerBadge}
+											<div class="tooltip-status-badge {headerBadge.badgeClass}">
+												<span class="status-indicator"></span>
+												<span>
+													<CanvasText text={$_(headerBadge.textKey)} />
+												</span>
+											</div>
+										{/if}
+									{:else if !effectivelyRestricted && !activeError && activeStatus}
 										<div class="tooltip-status-badge {statusBadgeClass}">
 											<span class="status-indicator"></span>
 											<!-- Bare wrapper gives the flag canvas the same inline-formatting context as the category spans below cuz without it flex baseline-aligns the canvas inconsistently with the span-wrapped siblings -->
@@ -1994,14 +2213,14 @@
 										{@render membershipBadgeSection()}
 									{/if}
 								</div>
-								<div class="tooltip-compact-header-right" class:is-visible={showCompactColumns}>
+								<div class="tooltip-compact-header-right" class:is-visible={isExpanded}>
 									{@render compactHeaderRight()}
 								</div>
 							</div>
 						{/if}
 
 						<!-- Header message and reviewer -->
-						<div class="tooltip-standard-header" class:is-hidden={showCompactColumns}>
+						<div class="tooltip-standard-header" class:is-hidden={isExpanded}>
 							{#if (userInfo || groupInfo) && (activeStatus || isNoData)}
 								<div class="tooltip-header">
 									<div class="header-message tooltip-header-message tooltip-header-message-canvas">
@@ -2011,14 +2230,6 @@
 							{/if}
 							{@render reviewerSection()}
 						</div>
-
-						<!-- Header Compact Toggle -->
-						<button
-							class="tooltip-header-toggle"
-							aria-label={$_('tooltip_header_toggle_aria')}
-							onclick={toggleHeaderCompact}
-							type="button"
-						></button>
 					</div>
 
 					<!-- Scrollable content -->

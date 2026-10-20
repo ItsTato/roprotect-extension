@@ -150,7 +150,7 @@
 }
 
 @utility tooltip-options-item {
-	@apply flex cursor-pointer items-center gap-2 rounded-sm border-none bg-transparent text-start text-xs font-medium inline-full;
+	@apply flex cursor-pointer items-center gap-2 rounded-md border-none bg-transparent text-start text-xs font-medium inline-full;
 	padding: 0.4375rem 0.5rem;
 	color: var(--color-text);
 	transition:
@@ -206,6 +206,12 @@
 @utility tooltip-options-item-suffix {
 	@apply text-2xs ms-auto font-mono;
 	color: var(--color-text-subtle);
+}
+
+/* Temporarily hidden in the options menu. Remove this rule to bring the
+   engine badge and the divider above it back. */
+@utility tooltip-options-engine-section {
+	display: none;
 }
 
 @utility tooltip-options-engine {

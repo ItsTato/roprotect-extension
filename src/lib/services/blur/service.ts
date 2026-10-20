@@ -291,6 +291,10 @@ export function injectDefaultBlurStyles(): void {
 	getOrCreateStyleElement().textContent = buildBlurCSS(true);
 }
 
+export function removeBlurStyles(): void {
+	document.querySelector(`#${BLUR_STYLE_ID}`)?.remove();
+}
+
 // Marks descendants under element using either modal selectors or the page-specific selector set
 export function markUserElementForBlur(element: Element, userId: string, pageType: PageType): void {
 	if (!isBlurEnabled() || revealedUsers.has(userId)) return;

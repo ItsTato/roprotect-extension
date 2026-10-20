@@ -20,7 +20,10 @@ const UsageKeyEntrySchema = v.object({
 	byService: v.record(v.string(), v.nullish(UsageServiceTotalsSchema)),
 	firstSeen: v.nullable(v.number()),
 	lastSeen: v.nullable(v.number()),
-	recentUserIds: v.array(v.union([v.string(), v.number()]))
+	recentUserIds: v.array(v.union([v.string(), v.number()])),
+	// Lifetime lookup counter. Optional: older backends omit it, in which case
+	// the endpoint falls back to the recent-ids count.
+	totalUserLookups: v.optional(v.number())
 });
 
 export const UsageResponseSchema = v.object({

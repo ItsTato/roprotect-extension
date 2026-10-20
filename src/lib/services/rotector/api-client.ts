@@ -1,6 +1,8 @@
-import { API_ACTIONS } from '../../types/constants';
+import { API_ACTIONS, PASC_FILE_LIMITS } from '../../types/constants';
 import type {
 	ApiResponse,
+	DiscordSignInPoll,
+	DiscordSignInStart,
 	ExportResult,
 	GroupStatus,
 	GroupTrackedUsersResponse,
@@ -9,6 +11,8 @@ import type {
 	MembershipVerificationChallenge,
 	OutfitSnapshotByIdResponse,
 	OutfitSnapshotByNameResponse,
+	PascFileDescriptor,
+	PascRecordUpsert,
 	QueueLimitsData,
 	QueueResult,
 	RequestOptions,
@@ -17,12 +21,35 @@ import type {
 	UserStatus
 } from '../../types/api';
 import type { ApiUsage } from '../../types/usage';
+import type { PascAccessLevel } from '../../data/pasc';
 import { restrictedAccessStore } from '../../stores/restricted-access';
 import { getAbortError } from '../../utils/abort';
 import { buildResponseError } from '../../utils/api/api-error';
 import { getLoggedInUserId } from '../../utils/client-id';
 import { get } from 'svelte/store';
 import { logger } from '../../utils/logging/logger';
+
+// Extension messaging JSON-serializes payloads, which mangles ArrayBuffers
+// into plain objects. File bytes therefore cross as base64 (chunked to avoid
+// spread/apply stack limits on large files) and the background decodes them.
+function encodeArrayBufferBase64(bytes: ArrayBuffer): string {
+	let binary = '';
+	const chunk = new Uint8Array(bytes);
+	const CHUNK_SIZE = 32_768;
+	for (let i = 0; i < chunk.length; i += CHUNK_SIZE) {
+		binary += String.fromCharCode(...chunk.subarray(i, i + CHUNK_SIZE));
+	}
+	return btoa(binary);
+}
+
+function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
 
 // The background HTTP layer owns retries + Retry-After + safe-method gating
 // Stacking retries here on top of that produced MAX_RETRIES² fetches per failure
@@ -225,6 +252,91 @@ class RotectorApiClient {
 		});
 	}
 
+	async getPascClearance(): Promise<PascAccessLevel> {
+		return sendMessage<PascAccessLevel>(API_ACTIONS.GET_PASC_CLEARANCE, {});
+	}
+
+	async upsertPascRecord(userId: string | number, record: PascRecordUpsert): Promise<UserStatus> {
+		return sendMessage<UserStatus>(API_ACTIONS.PASC_UPSERT_RECORD, {
+			userId,
+			record: record as unknown as Record<string, unknown>
+		});
+	}
+
+	async uploadPascFile(
+		userId: string | number,
+		filename: string,
+		bytes: ArrayBuffer,
+		contentType?: string,
+		access?: string
+	): Promise<PascFileDescriptor> {
+		// Check before base64 encoding: the expansion is what would blow the
+		// messaging limit (and briefly triple the file in memory).
+		if (bytes.byteLength > PASC_FILE_LIMITS.MAX_BYTES) {
+			throw new Error(
+				`File is too large (max ${String(PASC_FILE_LIMITS.MAX_BYTES / (1024 * 1024))} MB)`
+			);
+		}
+		return sendMessage<PascFileDescriptor>(API_ACTIONS.PASC_UPLOAD_FILE, {
+			userId,
+			filename,
+			bytesBase64: encodeArrayBufferBase64(bytes),
+			...(contentType !== undefined && { contentType }),
+			...(access !== undefined && { access })
+		});
+	}
+
+	async downloadPascFile(
+		userId: string | number,
+		fileId: string
+	): Promise<{ bytes: ArrayBuffer; contentType: string; filename: string }> {
+		const result = await sendMessage<{
+			bytesBase64: string;
+			contentType: string;
+			filename: string;
+		}>(API_ACTIONS.PASC_DOWNLOAD_FILE, { userId, fileId });
+		return {
+			bytes: decodeBase64ToArrayBuffer(result.bytesBase64),
+			contentType: result.contentType,
+			filename: result.filename
+		};
+	}
+
+	async deletePascFile(userId: string | number, fileId: string): Promise<{ deleted: string }> {
+		return sendMessage<{ deleted: string }>(API_ACTIONS.PASC_DELETE_FILE, {
+			userId,
+			fileId
+		});
+	}
+
+	async requestPascReview(
+		userId: string | number,
+		kind: 'report' | 'recheck',
+		context: {
+			displayName?: string;
+			username?: string;
+			flag?: string;
+			referralProvider?: string;
+			referralFlag?: string;
+			verdicts?: Array<{ provider: string; flag: string; detail: string }>;
+			comment?: string;
+		} = {}
+	): Promise<{ requested: string; user_id: number }> {
+		return sendMessage<{ requested: string; user_id: number }>(API_ACTIONS.PASC_REQUEST_REVIEW, {
+			userId,
+			kind,
+			...(context.displayName !== undefined && { displayName: context.displayName }),
+			...(context.username !== undefined && { username: context.username }),
+			...(context.flag !== undefined && { flag: context.flag }),
+			...(context.referralProvider !== undefined && {
+				referralProvider: context.referralProvider
+			}),
+			...(context.referralFlag !== undefined && { referralFlag: context.referralFlag }),
+			...(context.verdicts !== undefined && { verdicts: context.verdicts }),
+			...(context.comment !== undefined && { comment: context.comment })
+		});
+	}
+
 	async whoami(apiKey: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
 		logger.debug('[apiClient] whoami called', {
 			apiKeyPrefix: `${apiKey.slice(0, 8)}...`,
@@ -241,6 +353,14 @@ class RotectorApiClient {
 			error: result.error
 		});
 		return result;
+	}
+
+	async startDiscordSignIn(): Promise<DiscordSignInStart> {
+		return sendMessage<DiscordSignInStart>(API_ACTIONS.OAUTH_START, {});
+	}
+
+	async pollDiscordSignIn(pair: string): Promise<DiscordSignInPoll> {
+		return sendMessage<DiscordSignInPoll>(API_ACTIONS.OAUTH_POLL, { pair });
 	}
 }
 

@@ -35,8 +35,10 @@
 		extractApiOrigins
 	} from '@/lib/utils/permissions';
 	import { asApiError } from '@/lib/utils/api/api-error';
+	import { getAssetUrl } from '@/lib/utils/assets';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { formatTimestamp } from '@/lib/utils/time';
+	import { themeManager } from '@/lib/utils/theme';
 	import { _ } from 'svelte-i18n';
 	import CustomApiForm from './CustomApiForm.svelte';
 	import CustomApiImport from './CustomApiImport.svelte';
@@ -55,6 +57,22 @@
 	let grantingPermissions = $state(false);
 	let hasPermissions = $state(false);
 	let perApiPermissions = $state<Record<string, boolean>>({});
+
+	// Provider page only: SIGMANET shows the dedicated P mark, flipped against the page
+	// theme (dark UI -> light mark) so it stays readable on the card. Matched on the
+	// system id and the display name, since the service key it is built from can differ.
+	const theme = themeManager.effectiveTheme;
+	const sigmanetLogo = $derived(
+		$theme === 'dark'
+			? getAssetUrl('/assets/SIGMANET-LIGHT-P.png')
+			: getAssetUrl('/assets/SIGMANET-DARK-P.png')
+	);
+
+	function getLogo(api: CustomApiConfig): string | undefined {
+		const isSigmanet = api.id === 'system-scsn' || api.name.trim().toUpperCase() === 'SIGMANET';
+		if (isSigmanet) return sigmanetLogo;
+		return api.landscapeImageDataUrl;
+	}
 
 	const canAddMore = $derived($customApis.filter((api) => !api.isSystem).length < MAX_CUSTOM_APIS);
 	const uniqueOrigins = $derived([
@@ -361,14 +379,15 @@
 		{:else}
 			{#each $customApis as api, index (api.id)}
 				{@const endpoints = getEndpoints(api)}
+				{@const logo = getLogo(api)}
 				{@const needsPermission =
 					!api.isSystem && !api.enabled && perApiPermissions[api.id] === false}
 				<article class="api-card" class:disabled={!api.enabled}>
 					<div class="api-card-header">
 						<div class="api-card-header-left">
-							{#if api.landscapeImageDataUrl}
+							{#if logo}
 								<div class="api-card-image">
-									<img alt="{api.name} logo" src={api.landscapeImageDataUrl} />
+									<img alt="{api.name} logo" src={logo} />
 								</div>
 							{/if}
 							<h3 class="api-card-name">{api.name}</h3>

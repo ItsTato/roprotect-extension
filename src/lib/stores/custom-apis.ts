@@ -21,16 +21,18 @@ export const MAX_CUSTOM_APIS = 5;
 
 export const RO_PROTECT_API_ID = 'system-roprotect';
 
-const SERVICE_ORDER = ['scsn', 'rab', 'tase'] as const;
+const SERVICE_ORDER = ['scsn', 'rab', 'tase', 'pasc'] as const;
 const SERVICE_LABELS: Record<string, string> = {
 	scsn: 'SIGMANET',
 	rab: 'RAB',
-	tase: 'TASE'
+	tase: 'TASE',
+	pasc: 'PASC'
 };
 const SERVICE_IMAGES: Record<(typeof SERVICE_ORDER)[number], string> = {
 	scsn: getAssetUrl('/assets/sigmanet-dark.png'),
 	rab: getAssetUrl('/assets/rab.webp'),
-	tase: getAssetUrl('/assets/tase.webp')
+	tase: getAssetUrl('/assets/tase.webp'),
+	pasc: getAssetUrl('/assets/pasc-tab.png')
 };
 
 interface WhoamiData {
@@ -139,8 +141,12 @@ function createSystemApisFromWhoami(whoami: WhoamiData, apiKey: string): CustomA
 		return `${origin}${raw.startsWith('/') ? '' : '/'}${raw}`;
 	};
 
-	return SERVICE_ORDER.filter((id) => whoami.services.includes(id)).map((id, index) => {
-		const endpoint = whoami.endpoints[id];
+	// RoProtect presents PASC as `system-pasc` (the extension provider id) while
+	// everything else calls it `pasc`, so match either spelling in both lists.
+	return SERVICE_ORDER.filter(
+		(id) => whoami.services.includes(id) || whoami.services.includes(`system-${id}`)
+	).map((id, index) => {
+		const endpoint = whoami.endpoints[id] ?? whoami.endpoints[`system-${id}`];
 		// TASE now uses V2 endpoints: /v1/tase/v2/lookup/user/{userId} and /v1/tase/v2/lookup/users
 		// Always use V2 for TASE, ignoring what whoami returns (it may have v1 paths)
 		const isTase = id === 'tase';

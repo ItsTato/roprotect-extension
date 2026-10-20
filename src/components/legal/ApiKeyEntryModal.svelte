@@ -9,6 +9,7 @@
 	import { showSuccess } from '@/lib/stores/toast';
 	import Modal from '../ui/Modal.svelte';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
+	import DiscordSignIn from './DiscordSignIn.svelte';
 	import { ExternalLink } from '@lucide/svelte';
 	import { getAssetUrl } from '@/lib/utils/assets';
 
@@ -100,6 +101,11 @@
 		}
 	}
 
+	function handleDiscordSuccess() {
+		onSuccess();
+		isOpen = false;
+	}
+
 	function toggleVisibility() {
 		// The modal is rendered in a shadow root via OverlayPortal, so we need to query within the shadow root
 		// Find the modal root element that contains the shadow root
@@ -144,6 +150,12 @@
 		</div>
 
 		<div class="api-key-form">
+			<DiscordSignIn onSuccess={handleDiscordSuccess} showAvatar={false} />
+
+			<div class="discord-signin-divider">
+				<span>{$_('discord_signin_or')}</span>
+			</div>
+
 			<div class="form-group">
 				<label class="form-label" for="api-key">
 					{$_('api_key_modal_label')}

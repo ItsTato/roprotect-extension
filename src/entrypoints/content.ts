@@ -1,5 +1,5 @@
 import '../styles/index.css';
-import { mount } from 'svelte';
+import { mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
@@ -15,7 +15,12 @@ import {
 	setupRestrictedAccessListener
 } from '@/lib/stores/restricted-access';
 import { subscribeStorageKey } from '@/lib/utils/storage';
-import { injectBlurStyles, injectDefaultBlurStyles } from '@/lib/services/blur/service';
+import {
+	injectBlurStyles,
+	injectDefaultBlurStyles,
+	removeBlurStyles
+} from '@/lib/services/blur/service';
+import { detectPageType } from '@/lib/utils/dom/page-detection';
 import { computeAndCacheDeviceFingerprint } from '@/lib/utils/device-fingerprint';
 import { metricsCollector } from '@/lib/utils/logging/metrics-collector';
 import { registerOverlayContainer } from '@/lib/utils/overlay-portal-registry';
@@ -64,9 +69,14 @@ export default defineContentScript({
 
 	async main(ctx: ContentScriptContext) {
 		try {
-			injectDefaultBlurStyles();
-
 			logger.info('Rotector content script initializing...');
+
+			// Privacy first: blur supported pages before any async storage/API
+			// work. The per-setting pass below replaces this default stylesheet
+			// once settings are loaded.
+			if (detectPageType(globalThis.location.href) !== null) {
+				injectDefaultBlurStyles();
+			}
 
 			logger.debug('Loading stored language preference...');
 			await loadStoredLanguagePreference();
@@ -76,8 +86,9 @@ export default defineContentScript({
 			await initializeSettings();
 			logger.debug('Settings loaded successfully');
 
-			injectBlurStyles();
-			logger.debug('Blur styles injected');
+			if (detectPageType(globalThis.location.href) !== null) {
+				injectBlurStyles();
+			}
 
 			logger.debug('Loading custom APIs configuration...');
 			await loadCustomApis();
@@ -106,91 +117,221 @@ export default defineContentScript({
 
 			themeManager.initializeRobloxTheme();
 
-			const cssUrl = browser.runtime.getURL(
-				'/content-scripts/content.css' as Parameters<typeof browser.runtime.getURL>[0]
-			);
-			const cssResponse = await fetch(cssUrl);
-			const shadowCssRaw = await cssResponse.text();
-			const cssText = shadowCssRaw.replaceAll(':root', ':host');
+			// Pages without extension features (settings, game details, ...) get a
+			// zero visual footprint: no overlay, no injected styles, no controllers.
+			// The manager is created lazily only once the feature gate opens.
+			let pageManager: PageControllerManager | null = null;
+			const ensurePageManager = (): PageControllerManager => {
+				pageManager ??= new PageControllerManager();
+				return pageManager;
+			};
 
-			const ui = await createShadowRootUi(ctx, {
-				name: 'rotector-overlay',
-				position: 'overlay',
-				zIndex: 10_000,
-				css: cssText,
-				onMount(uiContainer, _shadow, shadowHost) {
-					registerOverlayContainer(uiContainer);
-					themeManager.registerPortalContainer(shadowHost);
+			type Overlay = Awaited<ReturnType<typeof createShadowRootUi>>;
+			let overlay: Overlay | null = null;
+			let overlayApp: ReturnType<typeof mount> | null = null;
+			let visualsActive = false;
+			let activation: Promise<void> | null = null;
+			let activationEpoch = 0;
+			let telemetryStarted = false;
+			let currentUrl = globalThis.location.href;
+			let navigationToken = 0;
+			let listenersInstalled = false;
 
-					// Register inner html element so [data-theme] CSS selectors
-					// match inside the shadow root (bare attribute selectors
-					// don't match the shadow host from within shadow CSS)
-					const shadowHtml = _shadow.querySelector('html');
-					if (shadowHtml) themeManager.registerPortalContainer(shadowHtml);
+			// Activation is async (CSS fetch + shadow mount). Each call captures an
+			// epoch; deactivateVisuals bumps it so an in-flight mount cannot finish
+			// after teardown and leave `visualsActive` true with no overlay attached.
+			function visualsAreActive(): boolean {
+				return visualsActive;
+			}
 
-					mount(OverlayRoot, { target: uiContainer });
-					logger.debug('Shadow root overlay mounted');
-					return uiContainer;
-				},
-				onRemove() {
-					logger.debug('Shadow root overlay removed');
+			async function activateVisuals(): Promise<void> {
+				if (visualsAreActive()) return;
+				if (activation) {
+					await activation;
+					if (visualsAreActive()) return;
+					// Previous activation was superseded (or failed); retry below.
 				}
-			});
-			ui.mount();
 
-			let pageManagerInitialized = false;
+				const epoch = ++activationEpoch;
+				activation = (async () => {
+					injectDefaultBlurStyles();
+					injectBlurStyles();
+					logger.debug('Blur styles injected');
 
-			function initializePageHandling() {
-				if (pageManagerInitialized) return;
-				pageManagerInitialized = true;
+					if (!overlay) {
+						const cssUrl = browser.runtime.getURL(
+							'/content-scripts/content.css' as Parameters<typeof browser.runtime.getURL>[0]
+						);
+						const cssResponse = await fetch(cssUrl);
+						const shadowCssRaw = await cssResponse.text();
+						const cssText = shadowCssRaw.replaceAll(':root', ':host');
 
-				void computeAndCacheDeviceFingerprint();
+						overlay = await createShadowRootUi(ctx, {
+							name: 'rotector-overlay',
+							position: 'overlay',
+							zIndex: 10_000,
+							css: cssText,
+							onMount(uiContainer, _shadow, shadowHost) {
+								registerOverlayContainer(uiContainer);
+								themeManager.registerPortalContainer(shadowHost);
 
-				const pageManager = new PageControllerManager();
-				logger.debug('Page controller manager initialized');
+								// Register inner html element so [data-theme] CSS selectors
+								// match inside the shadow root (bare attribute selectors
+								// don't match the shadow host from within shadow CSS)
+								const shadowHtml = _shadow.querySelector('html');
+								if (shadowHtml) themeManager.registerPortalContainer(shadowHtml);
 
-				metricsCollector.start();
-
-				let currentUrl = globalThis.location.href;
-				const checkForNavigation = () => {
-					if (globalThis.location.href !== currentUrl) {
-						currentUrl = globalThis.location.href;
-						logger.debug('Navigation detected', {
-							newUrl: currentUrl,
-							pathname: globalThis.location.pathname,
-							hash: globalThis.location.hash
+								overlayApp = mount(OverlayRoot, { target: uiContainer });
+								logger.debug('Shadow root overlay mounted');
+							},
+							onRemove() {
+								// Safety net for removals not initiated by deactivateVisuals.
+								const app = overlayApp;
+								overlayApp = null;
+								if (app) void unmount(app);
+								logger.debug('Shadow root overlay removed');
+							}
 						});
-						void pageManager.handleNavigation(currentUrl);
 					}
-				};
+					overlay.mount();
 
-				globalThis.addEventListener('popstate', () => {
-					logger.debug('Popstate event detected');
-					checkForNavigation();
-				});
+					// Teardown (gate close / unsupported navigation) won while the
+					// stylesheet or mount was pending: discard this activation.
+					if (epoch !== activationEpoch) {
+						const staleOverlay = overlay;
+						overlay = null;
+						staleOverlay.remove();
+						return;
+					}
 
-				globalThis.addEventListener('hashchange', () => {
-					logger.debug('Hash change detected', { hash: globalThis.location.hash });
-					checkForNavigation();
-				});
+					// Only mark active once the stylesheet fetch and mount succeeded, so a
+					// failed activation can be retried on the next navigation.
+					visualsActive = true;
 
-				void pageManager.handleNavigation(currentUrl);
+					if (!telemetryStarted) {
+						telemetryStarted = true;
+						void computeAndCacheDeviceFingerprint();
+						metricsCollector.start();
+					}
+				})()
+					.catch((error: unknown) => {
+						removeBlurStyles();
+						throw error;
+					})
+					.finally(() => {
+						activation = null;
+					});
+				await activation;
 			}
 
-			if (get(extensionFeaturesEnabled)) {
-				initializePageHandling();
-			} else {
-				const unsubscribe = extensionFeaturesEnabled.subscribe((enabled) => {
-					if (enabled) {
-						initializePageHandling();
-						unsubscribe();
-					}
+			function deactivateVisuals(): void {
+				activationEpoch++;
+				visualsActive = false;
+				removeBlurStyles();
+
+				const app = overlayApp;
+				overlayApp = null;
+				if (app) void unmount(app);
+
+				const currentOverlay = overlay;
+				overlay = null;
+				currentOverlay?.remove();
+				logger.debug('Visuals deactivated for unsupported page');
+			}
+
+			async function handleUrl(url: string): Promise<void> {
+				const token = ++navigationToken;
+
+				// The gate is part of the URL contract: SPA navigation must not
+				// bypass onboarding/API-key state.
+				if (!get(extensionFeaturesEnabled)) {
+					deactivateVisuals();
+					return;
+				}
+
+				if (detectPageType(url) === null) {
+					deactivateVisuals();
+					await pageManager?.deactivate();
+					return;
+				}
+
+				await activateVisuals();
+
+				// Gate closed while activation was pending: no visuals may survive.
+				if (!get(extensionFeaturesEnabled)) {
+					deactivateVisuals();
+					return;
+				}
+				// A newer navigation owns the overlay/controller now.
+				if (token !== navigationToken) return;
+
+				await ensurePageManager().handleNavigation(url);
+			}
+
+			const navigate = (url: string): void => {
+				void handleUrl(url).catch((error: unknown) => {
+					logger.error('Failed to handle navigation:', error, { url });
 				});
+			};
+
+			const checkForNavigation = () => {
+				if (globalThis.location.href !== currentUrl) {
+					currentUrl = globalThis.location.href;
+					logger.debug('Navigation detected', {
+						newUrl: currentUrl,
+						pathname: globalThis.location.pathname,
+						hash: globalThis.location.hash
+					});
+					navigate(currentUrl);
+				}
+			};
+
+			const handlePopstate = () => {
+				logger.debug('Popstate event detected');
+				checkForNavigation();
+			};
+
+			const handleHashchange = () => {
+				logger.debug('Hash change detected', { hash: globalThis.location.hash });
+				checkForNavigation();
+			};
+
+			const installNavigationListeners = (): void => {
+				if (listenersInstalled) return;
+				listenersInstalled = true;
+				globalThis.addEventListener('popstate', handlePopstate);
+				globalThis.addEventListener('hashchange', handleHashchange);
+			};
+
+			const removeNavigationListeners = (): void => {
+				if (!listenersInstalled) return;
+				listenersInstalled = false;
+				globalThis.removeEventListener('popstate', handlePopstate);
+				globalThis.removeEventListener('hashchange', handleHashchange);
+			};
+
+			// The gate can open (API key accepted) and close (key removed or legal
+			// paused) during a session. Navigation listeners exist only while open.
+			const unsubscribeGate = extensionFeaturesEnabled.subscribe((enabled) => {
+				if (enabled) {
+					installNavigationListeners();
+					currentUrl = globalThis.location.href;
+					navigate(currentUrl);
+					return;
+				}
+
+				removeNavigationListeners();
+				navigationToken++;
+				deactivateVisuals();
+				void pageManager?.deactivate();
 				logger.debug('Waiting for onboarding + legal acceptance to initialize page controllers');
-			}
+			});
 
 			window.addEventListener('beforeunload', () => {
 				logger.debug('Content script cleanup on page unload');
+				removeNavigationListeners();
+				unsubscribeGate();
+				deactivateVisuals();
 				metricsCollector.stop();
 				themeManager.cleanup();
 			});

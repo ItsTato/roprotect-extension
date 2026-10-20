@@ -1,5 +1,5 @@
 import { API_ACTIONS } from '@/lib/types/constants';
-import type { MembershipBadgeUpdatePayload } from '@/lib/types/api';
+import type { MembershipBadgeUpdatePayload, PascRecordUpsert } from '@/lib/types/api';
 import type { ContentMessage } from '@/lib/schemas/content-message';
 import {
 	getUnprocessedUserIdsFromStorage,
@@ -25,6 +25,15 @@ import {
 	updateMembershipBadge
 } from './endpoints/extension';
 import { customApiCheckUser, customApiCheckMultipleUsers, apiWhoami } from './endpoints/custom';
+import { pollDiscordSignIn, startDiscordSignIn } from './endpoints/oauth';
+import {
+	deletePascFile,
+	downloadPascFile,
+	getPascClearance,
+	requestPascReview,
+	uploadPascFile,
+	upsertPascRecord
+} from './endpoints/pasc';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
 import { getApiUsage } from './endpoints/usage';
@@ -148,8 +157,56 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		case API_ACTIONS.API_WHOAMI: {
 			return apiWhoami(msg.apiKey);
 		}
+		case API_ACTIONS.OAUTH_START: {
+			return startDiscordSignIn();
+		}
+		case API_ACTIONS.OAUTH_POLL: {
+			return pollDiscordSignIn(msg.pair);
+		}
 		case API_ACTIONS.GET_DISCORD_AVATARS: {
 			return getDiscordAvatars(msg.discordUserIds, msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.GET_PASC_CLEARANCE: {
+			return getPascClearance(msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.PASC_UPSERT_RECORD: {
+			return upsertPascRecord(
+				msg.userId,
+				msg.record as unknown as PascRecordUpsert,
+				msg.clientId ?? undefined
+			);
+		}
+		case API_ACTIONS.PASC_UPLOAD_FILE: {
+			return uploadPascFile(
+				msg.userId,
+				msg.filename,
+				msg.bytesBase64,
+				msg.contentType,
+				msg.access,
+				msg.clientId ?? undefined
+			);
+		}
+		case API_ACTIONS.PASC_DOWNLOAD_FILE: {
+			return downloadPascFile(msg.userId, msg.fileId, msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.PASC_DELETE_FILE: {
+			return deletePascFile(msg.userId, msg.fileId, msg.clientId ?? undefined);
+		}
+		case API_ACTIONS.PASC_REQUEST_REVIEW: {
+			return requestPascReview(
+				msg.userId,
+				msg.kind,
+				{
+					displayName: msg.displayName,
+					username: msg.username,
+					flag: msg.flag,
+					referralProvider: msg.referralProvider,
+					referralFlag: msg.referralFlag,
+					verdicts: msg.verdicts,
+					comment: msg.comment
+				},
+				msg.clientId ?? undefined
+			);
 		}
 	}
 }

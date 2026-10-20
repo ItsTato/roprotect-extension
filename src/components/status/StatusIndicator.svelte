@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
-	import type { EntityStatus } from '@/lib/types/api';
+	import type { EntityStatus, UserStatus } from '@/lib/types/api';
 	import type { CombinedStatus } from '@/lib/types/custom-api';
 	import { ENTITY_TYPES } from '@/lib/types/constants';
 	import { logger } from '@/lib/utils/logging/logger';
@@ -39,6 +39,7 @@
 		onQueue?:
 			| ((entityId: string, isReprocess?: boolean, status?: EntityStatus | null) => void)
 			| undefined;
+		onStatusUpdate?: ((status: UserStatus) => void) | undefined;
 		userUsername?: string | undefined;
 		userDisplayName?: string | undefined;
 		userAvatarUrl?: string | undefined;
@@ -54,6 +55,7 @@
 		suppressMembershipBadge = false,
 		onClick,
 		onQueue,
+		onStatusUpdate,
 		userUsername,
 		userDisplayName,
 		userAvatarUrl
@@ -374,6 +376,7 @@
 			onMouseEnter={handleTooltipMouseEnter}
 			onMouseLeave={handleTooltipMouseLeave}
 			onQueue={handleQueue}
+			{onStatusUpdate}
 			onViewOutfits={isGroup ? undefined : handleViewOutfits}
 			{userAvatarUrl}
 			{userDisplayName}
@@ -393,6 +396,7 @@
 			mode="expanded"
 			onClose={closeExpandedTooltip}
 			onQueue={handleExpandedQueue}
+			{onStatusUpdate}
 			onViewOutfits={isGroup ? undefined : handleViewOutfits}
 			{userAvatarUrl}
 			{userDisplayName}

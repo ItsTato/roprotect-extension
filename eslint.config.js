@@ -11,6 +11,13 @@ import unicorn from 'eslint-plugin-unicorn';
 import oxlint from 'eslint-plugin-oxlint';
 import svelteEslintParser from 'svelte-eslint-parser';
 import { tailwind4 } from 'tailwind-csstree';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+// Pin the TS project root: without this, typescript-eslint infers it by scanning
+// for tsconfig.json files and chokes when another tool leaves a repo copy inside
+// .kilo/worktrees (multiple candidate TSConfigRootDirs).
+const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
 	// ── Ignore patterns ──────────────────────────────────────────────
@@ -23,6 +30,7 @@ export default tseslint.config(
 			'**/build/**',
 			'**/.svelte-kit/**',
 			'**/.svelte-check/**',
+			'**/.kilo/**',
 			'**/public/**',
 			'**/scripts/**',
 			'**/*.min.js',
@@ -107,7 +115,7 @@ export default tseslint.config(
 			ecmaVersion: 2022,
 			sourceType: 'module',
 			parser: tseslint.parser,
-			parserOptions: { projectService: true },
+			parserOptions: { projectService: true, tsconfigRootDir },
 			globals: {
 				...globals.browser,
 				...globals.node,
@@ -216,6 +224,7 @@ export default tseslint.config(
 			parserOptions: {
 				parser: tseslint.parser,
 				projectService: true,
+				tsconfigRootDir,
 				svelteFeatures: { runes: true }
 			},
 			globals: {
@@ -245,6 +254,7 @@ export default tseslint.config(
 			parserOptions: {
 				parser: tseslint.parser,
 				projectService: true,
+				tsconfigRootDir,
 				extraFileExtensions: ['.svelte'],
 				svelteFeatures: { runes: true }
 			},
@@ -345,6 +355,7 @@ export default tseslint.config(
 			parserOptions: {
 				parser: tseslint.parser,
 				projectService: true,
+				tsconfigRootDir,
 				extraFileExtensions: ['.svelte']
 			}
 		},

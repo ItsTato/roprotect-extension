@@ -47,6 +47,10 @@ const UserStatusBaseSchema = v.object({
 	processed: v.optional(v.boolean()),
 	processedAt: v.optional(v.number()),
 	lastUpdated: v.optional(v.number()),
+	// Explicit PASC record-presence marker. The PASC proxy may add either flag;
+	// when present it wins over the badge-text heuristic in status-utils.
+	pascRecordPresent: v.optional(v.boolean()),
+	pascMissing: v.optional(v.boolean()),
 	badges: v.optional(
 		v.array(
 			v.object({

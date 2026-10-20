@@ -23,6 +23,7 @@
 	import { settings, updateSetting } from '@/lib/stores/settings';
 	import { SETTINGS_KEYS } from '@/lib/types/settings';
 	import ExtLink from '@/components/ui/ExtLink.svelte';
+	import DiscordSignIn from '@/components/legal/DiscordSignIn.svelte';
 	import {
 		clearBadge,
 		confirmVerification,
@@ -63,6 +64,7 @@
 	};
 
 	let apiKeyDraft = $state<string>(get(settings)[SETTINGS_KEYS.API_KEY]);
+	let lastStoredApiKey = get(settings)[SETTINGS_KEYS.API_KEY];
 	let apiKeyVisible = $state(false);
 	let savingKey = $state(false);
 	let avatarInfo = $state<CurrentAvatarInfo | null>(null);
@@ -108,6 +110,15 @@
 
 	$effect(() => {
 		void loadMembershipStatus();
+	});
+
+	// Keep the paste field in sync after Discord sign-in writes the key, without
+	// clobbering an unsaved draft on unrelated settings writes.
+	$effect(() => {
+		const stored = $settings[SETTINGS_KEYS.API_KEY];
+		if (stored === lastStoredApiKey) return;
+		lastStoredApiKey = stored;
+		apiKeyDraft = stored;
 	});
 
 	$effect(() => () => {
@@ -323,6 +334,13 @@
 	<section class="membership-section">
 		<h3 class="membership-section-title">{$_('membership_api_key_title')}</h3>
 		<p class="membership-section-description">{$_('membership_api_key_description')}</p>
+
+		<DiscordSignIn />
+
+		<div class="discord-signin-divider">
+			<span>{$_('discord_signin_or')}</span>
+		</div>
+
 		<div class="membership-key-row">
 			<input
 				class="membership-key-input"

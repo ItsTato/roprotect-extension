@@ -1,7 +1,8 @@
 import { fetchAllFriendIds } from '../roblox/friends';
 import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
-import { queryMultipleUsers, getEnabledCustomApis, isSystemApi } from './unified-query';
+import { queryMultipleUsers, getEnabledCustomApis } from './unified-query';
+import { getAssetUrl } from '../../utils/assets';
 import type { UserStatus } from '../../types/api';
 import type { CombinedStatus, CustomApiResult, CustomApiConfig } from '../../types/custom-api';
 import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
@@ -28,6 +29,63 @@ export type ScanCategory =
 	| 'unknown'
 	| 'safe';
 export type ScanCounts = Map<ScanCategory, number>;
+
+// Per-provider resolution counts surfaced alongside the percentage so the bar
+// can show e.g. "(65/248 SIGMANET, 80/248 RAB, 20/248 TASE)".
+export interface ScanProviderProgress {
+	apiId: string;
+	apiName: string;
+	logoUrl: string;
+	fallbackLogoUrl: string;
+	resolved: number;
+}
+
+export interface ScanProgressDetail {
+	total: number;
+	providers: ScanProviderProgress[];
+}
+
+export type ScanProgressCallback = (pct: number, detail?: ScanProgressDetail) => void;
+
+// Dedicated readout-only logos for the scan progress chips. These deliberately
+// differ from the provider's landscapeImageDataUrl (used by tooltip tabs etc):
+// small circular crops that stay legible at 14px.
+// Drop the provider's cropped readout logo at this path and `wxt prepare` will
+// pick it up as a valid PublicPath (until then the cast below stands in).
+const SCAN_PROVIDER_LOGO_OVERRIDES: Record<string, string> = {
+	'system-pasc': getAssetUrl('/assets/pasc-scan.png'),
+	'system-scsn': getAssetUrl('/assets/scsn-scan.png'),
+	'system-rab': getAssetUrl('/assets/rab-scan.png'),
+	'system-tase': getAssetUrl('/assets/tase-scan.png')
+};
+const PROVIDER_ORDER = ['system-scsn', 'system-rab', 'system-tase', 'system-pasc'];
+// Deterministic display order regardless of store ordering. Unknown ids sort
+// last so a future provider never jumps ahead of the known ones.
+function sortProviders<T extends { apiId: string }>(providers: T[]): T[] {
+	const orderOf = (apiId: string): number => {
+		const index = PROVIDER_ORDER.indexOf(apiId);
+		return index === -1 ? PROVIDER_ORDER.length : index;
+	};
+	return [...providers].toSorted((a, b) => orderOf(a.apiId) - orderOf(b.apiId));
+}
+
+// Zeroed readout for the friend-ID fetch phase (0→30%), so the provider strip
+// renders from the start instead of waiting for the first batch answer. Includes
+// every enabled API (system and custom) because the denominator counts them all;
+// PASC only appears when it is actually enabled.
+function buildZeroedDetail(total: number): ScanProgressDetail {
+	const apis = getEnabledCustomApis();
+	const providers = sortProviders(
+		apis.map((api) => ({
+			apiId: api.id,
+			apiName: api.name,
+			logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[api.id] ?? api.landscapeImageDataUrl ?? '',
+			fallbackLogoUrl: api.landscapeImageDataUrl ?? '',
+			resolved: 0
+		}))
+	);
+	return { total, providers };
+}
 
 function flagToCategory(flagType: number): ScanCategory {
 	switch (flagType) {
@@ -117,20 +175,22 @@ function increment(counts: ScanCounts, category: ScanCategory): void {
 export async function scanFriendsForUser(
 	userId: string,
 	isOwnFriends: boolean,
-	onProgress: (pct: number) => void,
+	onProgress: ScanProgressCallback,
 	signal: AbortSignal
 ): Promise<ScanCounts> {
 	const counts: ScanCounts = new Map();
 
 	const friendIds = await fetchAllFriendIds(
 		userId,
-		(fetched) => onProgress(Math.min(fetched * 0.15, SCAN_PHASE_CHECK_START)),
+		(fetched) => {
+			onProgress(Math.min(fetched * 0.15, SCAN_PHASE_CHECK_START), buildZeroedDetail(fetched));
+		},
 		signal
 	);
 
 	if (friendIds.length === 0) return counts;
 
-	onProgress(SCAN_PHASE_CHECK_START);
+	onProgress(SCAN_PHASE_CHECK_START, buildZeroedDetail(friendIds.length));
 
 	const lookupContext = isOwnFriends ? LOOKUP_CONTEXT.FRIENDS : undefined;
 	const completed = new Set<string>();
@@ -141,20 +201,45 @@ export async function scanFriendsForUser(
 		{
 			lookupContext,
 			signal,
-			onUpdate: (friendId, combined) => {
-				// Track completion only when ALL ENABLED system APIs have resolved for this friend.
-				const enabledSystemApis = getEnabledCustomApis().filter(isSystemApi);
-				const enabledSystemIds: string[] = enabledSystemApis.map((api: CustomApiConfig) => api.id);
-				if (enabledSystemIds.length === 0) return; // no system APIs configured
+			onUpdate: (friendId, combined, providers) => {
+				// Completion tracks every enabled API the user can actually access —
+				// system providers plus custom ones — so a friend counts once all of
+				// *their* sources have answered, whichever those are.
+				const enabledIds: string[] = getEnabledCustomApis().map((api: CustomApiConfig) => api.id);
+				if (enabledIds.length === 0) return; // no APIs configured at all
 
-				const allResolved = enabledSystemIds.every((id: string) => {
+				const allResolved = enabledIds.every((id: string) => {
 					const result = combined.get(id);
 					return result && !result.loading;
 				});
-				if (!allResolved || completed.has(friendId)) return;
-				completed.add(friendId);
-				const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
-				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));
+				if (allResolved && !completed.has(friendId)) {
+					completed.add(friendId);
+				}
+
+				// Advance on ANY provider's answers, not just fully-resolved friends:
+				// holding the bar until the slowest provider finishes its first chunk
+				// is what pinned it at 30%. System and custom providers both report
+				// per-provider counts; the per-friend fallback is only a safety net.
+				if (providers.length === 0) {
+					const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
+					onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));
+					return;
+				}
+				const resolvedSum = providers.reduce((sum, p) => sum + p.resolved, 0);
+				const pct =
+					SCAN_PHASE_CHECK_START +
+					(resolvedSum / (total * providers.length)) * SCAN_PHASE_CHECK_RANGE;
+				const detail: ScanProgressDetail = {
+					total,
+					providers: sortProviders(providers).map((p) => ({
+						apiId: p.apiId,
+						apiName: p.apiName,
+						logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
+						fallbackLogoUrl: p.logoUrl,
+						resolved: p.resolved
+					}))
+				};
+				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), detail);
 			}
 		}
 	);
@@ -171,7 +256,7 @@ export async function scanFriendsForUser(
 
 export async function scanGroupsForUser(
 	userId: string,
-	onProgress: (pct: number) => void,
+	onProgress: ScanProgressCallback,
 	signal: AbortSignal
 ): Promise<ScanCounts> {
 	const counts: ScanCounts = new Map();

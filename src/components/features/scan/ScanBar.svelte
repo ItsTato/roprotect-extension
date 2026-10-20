@@ -8,10 +8,15 @@
 	import { logger } from '@/lib/utils/logging/logger';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
-	import type { ScanCategory, ScanCounts } from '@/lib/services/rotector/scan-jobs';
+	import type {
+		ScanCategory,
+		ScanCounts,
+		ScanProgressCallback,
+		ScanProgressDetail
+	} from '@/lib/services/rotector/scan-jobs';
 
 	interface Props {
-		scan: (onProgress: (pct: number) => void, signal: AbortSignal) => Promise<ScanCounts>;
+		scan: (onProgress: ScanProgressCallback, signal: AbortSignal) => Promise<ScanCounts>;
 		label: string;
 	}
 
@@ -87,6 +92,7 @@
 	let phase = $state<'scanning' | 'complete' | 'error'>('scanning');
 	const progress = new Tween(0, { duration: 600, easing: cubicOut });
 	let counts = new SvelteMap<ScanCategory, number>();
+	let providerDetail = $state<ScanProgressDetail | null>(null);
 	const scanBatch = createAbortableBatch();
 
 	const totalCount = $derived.by(() =>
@@ -105,10 +111,12 @@
 		phase = 'scanning';
 		void progress.set(0, { duration: 0 });
 		counts.clear();
+		providerDetail = null;
 
 		try {
-			const result = await scan((pct) => {
+			const result = await scan((pct, detail) => {
 				void progress.set(pct);
+				if (detail) providerDetail = detail;
 			}, signal);
 			for (const [k, v] of result) counts.set(k, v);
 			await progress.set(100);
@@ -137,6 +145,32 @@
 			></span>
 		</span>
 		<span class="rotector-scan-progress-text">{Math.round(progress.current)}%</span>
+		{#if providerDetail && providerDetail.providers.length > 0}
+			<span class="rotector-scan-progress-detail" aria-hidden="true">
+				{#each providerDetail.providers as p (p.apiId)}
+					<span class="rotector-scan-provider-chip" title={p.apiName}>
+						{#if p.logoUrl}
+							<img
+								class="rotector-scan-provider-logo"
+								alt=""
+								height="14"
+								onerror={(event) => {
+									const img = event.currentTarget as HTMLImageElement;
+									// Dedicated readout asset missing (e.g. not shipped yet):
+									// fall back to the provider's own logo once.
+									if (p.fallbackLogoUrl && img.src !== p.fallbackLogoUrl) {
+										img.src = p.fallbackLogoUrl;
+									}
+								}}
+								src={p.logoUrl}
+								width="14"
+							/>
+						{/if}
+						{`${String(p.resolved)}/${String(providerDetail?.total ?? 0)}`}
+					</span>
+				{/each}
+			</span>
+		{/if}
 	</span>
 {:else if phase === 'complete'}
 	<span class="rotector-scan-results">

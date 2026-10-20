@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { scanGroupsForUser } from '@/lib/services/rotector/scan-jobs';
+	import type { ScanProgressCallback } from '@/lib/services/rotector/scan-jobs';
 	import ScanBar from '../scan/ScanBar.svelte';
 
 	interface Props {
@@ -8,7 +9,7 @@
 
 	let { userId }: Props = $props();
 
-	function scan(onProgress: (pct: number) => void, signal: AbortSignal) {
+	function scan(onProgress: ScanProgressCallback, signal: AbortSignal) {
 		return scanGroupsForUser(userId, onProgress, signal);
 	}
 </script>

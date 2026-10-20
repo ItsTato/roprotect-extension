@@ -2,6 +2,54 @@ import type { Changelog } from '@/lib/types/changelog';
 
 export const CHANGELOGS: Changelog[] = [
 	{
+		id: 'v2.22.0',
+		version: '2.22.0',
+		date: '2026-10-14',
+		title: 'PASC provider: human-reviewed verdicts with override',
+		summary:
+			'A new PASC provider tab shows human-reviewed case files whose verdicts override the automatic providers. Case details stay gated by clearance, and reviewers can create and edit records without leaving the tooltip.',
+		changes: [
+			{
+				type: 'added',
+				description: 'PASC provider tab with human-reviewed case files and verdict override'
+			},
+			{
+				type: 'added',
+				description: 'Record creation and editing from the tooltip for M1+ reviewers'
+			},
+			{
+				type: 'added',
+				description: 'Case-file attachments with per-file visibility levels'
+			},
+			{
+				type: 'changed',
+				description: 'Scan totals and indicators follow the PASC verdict when one exists'
+			}
+		]
+	},
+	{
+		id: 'v2.21.0',
+		version: '2.21.0',
+		date: '2026-10-01',
+		title: 'Group verdicts move to SCSN, and a richer tooltip',
+		summary:
+			'Group verdicts now come from SCSN, the tooltip grows a TASE V2 account header with Discord avatars, and the extension icon has been refreshed.',
+		changes: [
+			{
+				type: 'changed',
+				description: 'Group verdicts are now served by SCSN instead of the first-party backend'
+			},
+			{
+				type: 'added',
+				description: 'Tooltip now shows a TASE V2 account header, including Discord avatars'
+			},
+			{
+				type: 'changed',
+				description: 'Refreshed extension icon'
+			}
+		]
+	},
+	{
 		id: 'v2.20.0',
 		version: '2.20.0',
 		date: '2026-09-28',

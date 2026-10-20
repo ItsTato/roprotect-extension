@@ -1,0 +1,548 @@
+/* =================================
+   PASC PROVIDER (MOCKUP SCAFFOLD — see T:\Python Projects\TLET\PASC\PASC.md)
+   Class prefix: pasc-
+   ================================= */
+
+@utility pasc-container {
+	@apply flex flex-col gap-4;
+	container-type: inline-size;
+}
+
+@utility pasc-header {
+	@apply flex items-center gap-2.5;
+}
+
+@utility pasc-header-logo {
+	@apply block h-7 shrink-0 inline-auto;
+}
+
+@utility pasc-access-chip {
+	@apply inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]! font-medium!;
+	border-color: var(--color-border-subtle);
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-columns {
+	@apply grid gap-4;
+
+	/* The Discord card carries more inline detail (title, chip, summary),
+	   so give it a little more room than the provider column. */
+	grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+/* Preview tooltips are far narrower than the expanded minimum; stack the two
+   columns there so the Discord rows keep their full inline room. */
+@container (max-width: 30rem) {
+	.pasc-columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@utility pasc-columns-single {
+	grid-template-columns: 1fr;
+}
+
+@utility pasc-column-title {
+	@apply m-0 flex min-h-6 items-center text-[12px]! font-semibold! tracking-wide uppercase;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-provider-row {
+	@apply flex items-center gap-2.5 rounded-md px-3 py-2.5;
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-provider-name {
+	@apply shrink-0 text-[12px]! font-semibold!;
+}
+
+@utility pasc-provider-detail {
+	@apply min-w-0 flex-1 truncate text-[12px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-note {
+	@apply rounded-md px-3 py-2.5 text-[12px]!;
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-note-label {
+	@apply mb-1 block text-[11px]! font-semibold! tracking-wide uppercase;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-meta {
+	@apply text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+/* Centered footnote at the bottom of the PASC panel. Mirrors the tooltip
+   metadata item (small, tertiary, tight) but wraps instead of clipping when a
+   reviewer name or date is longer than the card. */
+@utility pasc-footer {
+	@apply text-2xs flex flex-wrap items-center justify-center gap-x-1.5 px-2 py-1 text-center font-normal inline-full;
+	color: var(--color-text-tertiary);
+	overflow-wrap: anywhere;
+}
+
+@utility pasc-edit-button {
+	@apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 py-1 text-[12px]! font-medium!;
+	border-color: var(--color-border);
+	color: var(--color-text);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
+/* ---- Edit modal ---- */
+
+@utility pasc-field {
+	@apply flex flex-col gap-1;
+}
+
+@utility pasc-field-label {
+	@apply text-[12px]! font-semibold!;
+}
+
+@utility pasc-field-row {
+	@apply flex items-center gap-2;
+}
+
+@utility pasc-textarea {
+	@apply min-h-20 rounded-md border p-2 text-[12px]! inline-full;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	resize: vertical;
+}
+
+/* Custom listbox — replaces the browser's native select chrome inside the
+   tooltip/modal surfaces. The menu flips above the trigger when the field sits
+   near the bottom of the viewport (set in Select.svelte). */
+@utility pasc-select {
+	@apply relative inline-flex;
+}
+
+@utility pasc-select-trigger {
+	@apply inline-flex cursor-pointer items-center justify-between gap-2 rounded-md border px-2 py-1 text-[12px]!;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	&:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+
+	&.is-open .pasc-select-chevron {
+		transform: rotate(180deg);
+	}
+}
+
+@utility pasc-select-value {
+	@apply truncate;
+}
+
+@utility pasc-select-chevron {
+	@apply shrink-0 transition-transform duration-150;
+	color: var(--color-text-subtle);
+}
+
+/* Portaled to the overlay container and pinned to the viewport, so a modal
+   body's scroll area can never clip the menu. Coordinates come from
+   Select.svelte; only the sizing/anchoring rules live here. */
+@utility pasc-select-menu {
+	@apply fixed z-10050 flex flex-col gap-0.5 overflow-y-auto rounded-md border p-1;
+	min-inline-size: 5.5rem;
+	max-inline-size: 18rem;
+	background-color: var(--color-bg-content);
+	border-color: var(--color-border-subtle);
+	box-shadow: var(--shadow-soft);
+}
+
+@utility pasc-select-option {
+	@apply flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-1 text-start text-[12px]!;
+	color: var(--color-text);
+
+	&:hover,
+	&.is-active {
+		background-color: var(--color-hover);
+	}
+
+	&.is-selected {
+		color: var(--color-text-heading);
+		font-weight: 600;
+	}
+}
+
+@utility pasc-flag-options {
+	@apply flex flex-wrap gap-1.5;
+}
+
+@utility pasc-flag-option {
+	@apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-center text-[12px]! font-medium!;
+	border-color: var(--color-border);
+	background-color: transparent;
+	color: var(--color-text-subtle);
+
+	&.selected {
+		border-color: var(--color-primary);
+		color: var(--color-text-heading);
+	}
+}
+
+@utility pasc-file-row {
+	@apply flex cursor-pointer items-center gap-2 rounded-md border-0 px-3 py-2.5 text-start text-[12px]! inline-full;
+	background-color: var(--color-bg-tertiary);
+	color: var(--color-text);
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
+@utility pasc-file-row-wrap {
+	@apply flex items-center gap-1.5;
+}
+
+@utility pasc-file-select {
+	@apply min-w-0 flex-1;
+}
+
+@utility pasc-file-delete {
+	@apply inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-[11px]! font-medium!;
+	border-color: var(--color-border);
+	color: var(--color-status-error);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+
+	&:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+}
+
+@utility pasc-file-image {
+	@apply rounded-md block-auto max-inline-full;
+	max-height: 16rem;
+}
+
+@utility pasc-file-download {
+	@apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[12px]! font-medium! no-underline inline-fit;
+	border-color: var(--color-border);
+	color: var(--color-text);
+	background-color: transparent;
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+}
+
+@utility pasc-file-name {
+	@apply min-w-0 flex-1 truncate font-medium!;
+}
+
+@utility pasc-file-meta {
+	@apply shrink-0 text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-file-viewer {
+	@apply mt-2 flex flex-col gap-1 rounded-md border p-2;
+	border-color: var(--color-border-subtle);
+}
+
+/* ---- Case-file management (edit modal) ---- */
+
+@utility pasc-file-count {
+	@apply inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px]! font-semibold!;
+	background-color: var(--color-bg-tertiary);
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-upload {
+	@apply flex flex-col gap-1 rounded-md border px-2.5 py-2;
+	border-color: var(--color-border-subtle);
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-upload-row {
+	@apply flex flex-wrap items-center gap-2;
+}
+
+@utility pasc-file-level-label {
+	@apply shrink-0 text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-upload-hint {
+	@apply text-[10px]!;
+	color: var(--color-text-tertiary);
+}
+
+@utility pasc-file-list {
+	@apply flex flex-col gap-1.5;
+}
+
+@utility pasc-file-manage-row {
+	@apply flex items-center gap-2 rounded-md px-2.5 py-2 text-[12px]!;
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-file-kind {
+	@apply inline-flex shrink-0 items-center justify-center rounded-md;
+	width: 1.5rem;
+	height: 1.5rem;
+	background-color: var(--color-bg);
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-file-level {
+	@apply inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px]! font-semibold!;
+	border-color: var(--color-border-subtle);
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-file-empty {
+	@apply rounded-md border border-dashed px-3 py-4 text-center text-[11px]!;
+	border-color: var(--color-border-subtle);
+	color: var(--color-text-tertiary);
+}
+
+@utility pasc-file-error {
+	@apply text-[11px]!;
+	color: var(--color-status-error);
+}
+
+@utility pasc-markdown {
+	@apply flex flex-col gap-1.5 text-[12px]!;
+
+	& p {
+		@apply m-0;
+	}
+
+	& ul {
+		@apply m-0 flex flex-col gap-1 ps-4;
+	}
+
+	& h1,
+	& h2,
+	& h3 {
+		@apply m-0 text-[13px]! font-semibold!;
+		color: var(--color-text-heading);
+	}
+}
+
+@utility pasc-modal-actions {
+	@apply flex shrink-0 items-center justify-end gap-2;
+	padding-bottom: 1.125rem;
+}
+
+@utility pasc-modal-body {
+	@apply min-h-0 flex-1 overflow-y-auto;
+}
+
+@utility pasc-editor-layout {
+	@apply grid gap-2;
+	grid-template-columns: 1fr 1fr;
+}
+
+@utility pasc-editor-pane {
+	@apply flex flex-col overflow-hidden rounded-md border;
+	height: 240px;
+	border-color: var(--color-border);
+
+	& .cm-editor {
+		height: 100%;
+	}
+
+	& .cm-scroller {
+		overflow-y: auto;
+	}
+}
+
+@utility pasc-preview-pane {
+	@apply overflow-auto rounded-md border p-2 text-[12px]!;
+	height: 240px;
+	border-color: var(--color-border);
+	background-color: var(--color-bg);
+	color: var(--color-text);
+}
+
+/* ---- Linked Discord (RoWifi) ---- */
+
+@utility pasc-discord {
+	@apply flex flex-col gap-2;
+}
+
+@utility pasc-discord-header {
+	@apply flex min-h-6 min-w-0 items-center gap-2 overflow-hidden;
+}
+
+@utility pasc-discord-title {
+	@apply m-0 flex shrink-0 items-center gap-1.5 text-[12px]! font-semibold! tracking-wide whitespace-nowrap uppercase;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-discord-summary {
+	@apply ms-auto flex shrink-0 items-center gap-2.5 text-[11px]! whitespace-nowrap;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-discord-summary-item {
+	@apply inline-flex items-center gap-1 whitespace-nowrap;
+}
+
+@utility pasc-discord-flagged {
+	color: var(--color-status-unsafe);
+}
+
+@utility pasc-discord-list {
+	@apply m-0 flex list-none flex-col gap-1.5 p-0;
+}
+
+@utility pasc-discord-account {
+	@apply overflow-hidden rounded-md border;
+	border-color: var(--color-border-subtle);
+	background-color: var(--color-bg-tertiary);
+}
+
+@utility pasc-discord-account-button {
+	@apply flex cursor-pointer items-center gap-2.5 overflow-hidden border-0 bg-transparent p-2.5 text-start inline-full;
+	color: var(--color-text);
+
+	&:hover {
+		background-color: var(--color-hover);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: -2px;
+	}
+
+	&.is-static {
+		@apply cursor-default;
+
+		&:hover {
+			background-color: transparent;
+		}
+	}
+}
+
+@utility pasc-discord-avatar {
+	@apply relative h-8 w-8 shrink-0 rounded-full;
+	background-color: var(--color-bg);
+}
+
+@utility pasc-discord-avatar-img {
+	@apply rounded-full object-cover block-full inline-full;
+}
+
+@utility pasc-discord-avatar-fallback {
+	@apply absolute inset-0 m-auto;
+	color: var(--color-text-tertiary);
+}
+
+/* Severity dot mirrors the TASE avatar badge: solid severity fill with a
+   white glyph, pinned to the avatar's bottom-inline-end corner. */
+@utility pasc-discord-avatar-flag {
+	@apply absolute flex items-center justify-center rounded-full;
+	inset-inline-end: -0.125rem;
+	inset-block-end: -0.125rem;
+	inline-size: 0.875rem;
+	block-size: 0.875rem;
+	background-color: var(--pasc-discord-flag, var(--color-status-unsafe));
+	box-shadow: var(--status-badge-shadow);
+}
+
+@utility pasc-discord-identity {
+	@apply flex min-w-0 flex-1 flex-col leading-tight;
+}
+
+@utility pasc-discord-name {
+	@apply truncate text-[12px]! font-semibold!;
+	color: var(--color-text-heading);
+}
+
+@utility pasc-discord-handle {
+	@apply truncate text-[11px]!;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-discord-id {
+	@apply truncate font-mono text-[10px]!;
+	color: var(--color-text-tertiary);
+	user-select: text;
+}
+
+@utility pasc-discord-side {
+	@apply flex shrink-0 items-center gap-1.5;
+}
+
+@utility pasc-discord-server-count {
+	@apply text-[11px]! whitespace-nowrap;
+	color: var(--color-text-subtle);
+}
+
+@utility pasc-discord-chevron {
+	@apply shrink-0 transition-transform duration-150;
+	color: var(--color-text-tertiary);
+
+	.pasc-discord-account.is-expanded & {
+		transform: rotate(180deg);
+	}
+}
+
+@utility pasc-discord-servers {
+	@apply m-0 flex list-none flex-col gap-1 border-bs p-2;
+	border-color: var(--color-border-subtle);
+}
+
+@utility pasc-discord-server {
+	@apply flex items-center gap-2 rounded-sm px-1.5 py-1;
+	background-color: var(--color-bg);
+}
+
+@utility pasc-discord-server-name {
+	@apply min-w-0 flex-1 truncate text-[11px]!;
+	color: var(--color-text);
+}
+
+@utility pasc-discord-server-flag {
+	@apply shrink-0 text-[10px]! font-medium! whitespace-nowrap;
+}
+
+/* Exports clone the tooltip into a fixed-width host. Keep every Discord row on
+   one line there too, so a narrow capture cannot stack names or IDs. */
+.expanded-tooltip[data-tooltip-export='true'] {
+	& .pasc-discord-header,
+	& .pasc-discord-account-button,
+	& .pasc-discord-name,
+	& .pasc-discord-handle,
+	& .pasc-discord-id,
+	& .pasc-discord-summary,
+	& .pasc-discord-title,
+	& .pasc-discord-server-count,
+	& .pasc-discord-server-flag {
+		white-space: nowrap;
+	}
+
+	& .pasc-discord-identity {
+		min-width: 0;
+		overflow: hidden;
+	}
+}
