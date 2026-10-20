@@ -33,6 +33,10 @@
 	const uid = $props.id();
 	const listboxId = `${uid}-listbox`;
 
+	function optionId(index: number): string {
+		return `${uid}-option-${String(index)}`;
+	}
+
 	let root: HTMLDivElement | undefined = $state();
 	let trigger: HTMLButtonElement | undefined = $state();
 	let menuEl: HTMLDivElement | undefined = $state();
@@ -149,6 +153,9 @@
 			case 'Escape': {
 				if (!open) return;
 				event.preventDefault();
+				// Consume the key: the Select may live inside the tooltip, which
+				// also closes on Escape.
+				event.stopPropagation();
 				close();
 				return;
 			}
@@ -202,6 +209,7 @@
 		bind:this={trigger}
 		class="pasc-select-trigger"
 		class:is-open={open}
+		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
 		aria-controls={listboxId}
 		aria-expanded={open}
 		aria-haspopup="listbox"
@@ -209,6 +217,7 @@
 		{disabled}
 		onclick={toggle}
 		onkeydown={handleKeydown}
+		role="combobox"
 		{title}
 		type="button"
 	>
@@ -233,6 +242,7 @@
 			>
 				{#each options as option, index (option.value)}
 					<button
+						id={optionId(index)}
 						class="pasc-select-option"
 						class:is-active={index === activeIndex}
 						class:is-selected={option.value === value}
@@ -240,6 +250,7 @@
 						onclick={() => selectOption(index)}
 						onmouseenter={() => (activeIndex = index)}
 						role="option"
+						tabindex="-1"
 						type="button"
 					>
 						<span>{option.label}</span>

@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { API_ACTIONS, CAPTCHA_MESSAGES } from '@/lib/types/constants';
+import { API_ACTIONS, CAPTCHA_MESSAGES, PASC_FILE_LIMITS } from '@/lib/types/constants';
 import { PersistedCustomApiSchema } from './custom-api';
 
 const UserId = v.union([v.string(), v.number()]);
@@ -34,6 +34,15 @@ const ContentMessageSchema = v.variant('action', [
 	v.object({
 		action: v.literal(API_ACTIONS.API_WHOAMI),
 		apiKey: v.string(),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.OAUTH_START),
+		clientId: ClientId
+	}),
+	v.object({
+		action: v.literal(API_ACTIONS.OAUTH_POLL),
+		pair: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 		clientId: ClientId
 	}),
 	v.object({
@@ -171,12 +180,20 @@ const ContentMessageSchema = v.variant('action', [
 		action: v.literal(API_ACTIONS.PASC_UPLOAD_FILE),
 		userId: UserId,
 		filename: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-		contentType: v.optional(v.string()),
+		contentType: v.optional(
+			v.pipe(v.string(), v.maxLength(PASC_FILE_LIMITS.MAX_CONTENT_TYPE_LENGTH))
+		),
 		access: v.optional(v.picklist(['0', 'A1', 'A2', 'M1', 'M2'])),
 		// Base64, not ArrayBuffer: extension messaging JSON-serializes the
 		// payload, so an ArrayBuffer arrives as a plain Object and fails
 		// `v.instance(ArrayBuffer)`. The sender encodes, background decodes.
-		bytesBase64: v.pipe(v.string(), v.minLength(1)),
+		// The length cap is the base64 expansion of the byte cap, so an
+		// oversized file is rejected before the background allocates it.
+		bytesBase64: v.pipe(
+			v.string(),
+			v.minLength(1),
+			v.maxLength(PASC_FILE_LIMITS.MAX_BASE64_LENGTH)
+		),
 		clientId: ClientId
 	}),
 	v.object({

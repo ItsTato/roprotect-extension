@@ -37,8 +37,7 @@
 	} from '@/lib/utils/status/violation-formatter';
 	import type { TaseUserRecord, DiscordAvatar } from '@/lib/schemas/custom-api';
 	import TaseV2Display from './TaseV2Display.svelte';
-	// Live PASC wiring (real lookup data mapped onto the tab view model). The
-	// MOCK_* preview below stays until whoami reports system-pasc.
+	// Live PASC wiring (real lookup data mapped onto the tab view model).
 	import PascDisplay from './PascDisplay.svelte';
 	import PascEditModal from './PascEditModal.svelte';
 	import {
@@ -51,14 +50,7 @@
 		pascCanEdit,
 		pascViewerLevel as pascClearanceLevel
 	} from '@/lib/stores/pasc-clearance';
-	import {
-		MOCK_PASC_DISCORD_ACCOUNTS,
-		MOCK_PASC_RECORD,
-		PASC_FLAG_TO_NUMERIC,
-		type PascAccessLevel,
-		type PascDiscordAccount,
-		type PascRecord
-	} from '@/lib/data/pasc-mock';
+	import { PASC_FLAG_TO_NUMERIC, type PascDiscordAccount, type PascRecord } from '@/lib/data/pasc';
 	import { getAssetUrl } from '@/lib/utils/assets';
 	import {
 		detectPageContext,
@@ -177,6 +169,9 @@
 		userUsername?: string | undefined;
 		userDisplayName?: string | undefined;
 		userAvatarUrl?: string | undefined;
+		// Let the owning page/list propagate a PASC save or refresh to the combined
+		// status it passed in, so indicators and warnings do not stay stale.
+		onStatusUpdate?: ((status: UserStatus) => void) | undefined;
 	}
 
 	interface HeaderMessage {
@@ -204,7 +199,8 @@
 		onMouseLeave,
 		userUsername,
 		userDisplayName,
-		userAvatarUrl
+		userAvatarUrl,
+		onStatusUpdate
 	}: Props = $props();
 
 	let tooltipRef = $state<HTMLElement>();
@@ -294,35 +290,26 @@
 						: getAssetUrl('/assets/SIGMANET-DARK-P.png')
 					: result.landscapeImageDataUrl
 		}));
-		// MOCK ONLY — the PASC tab renders mock data until the backend reports
-		// system-pasc (see T:\Python Projects\TLET\PASC\PASC.md). Intentionally ungated: remove this entry
-		// together with the content branch once the real provider ships.
-		if (!entries.some((tab) => tab.id === 'system-pasc')) {
-			entries.push({
-				id: 'system-pasc',
-				name: 'PASC',
-				loading: false,
-				error: false,
-				noData: false,
-				landscapeImageDataUrl: getAssetUrl('/assets/pasc-tab.png')
-			});
-		}
 		return entries;
 	});
 
-	// MOCK ONLY — edit-modal state + full-clearance viewer for the PASC preview.
-	// Used only while whoami does not report system-pasc (no live entry).
+	// PASC is a real provider tab only when whoami reports system-pasc. Without
+	// the provider there is no tab: the absence of data must never be filled
+	// with a mock verdict.
 	let pascEditing = $state(false);
-	const pascViewerLevel = 'M2' as PascAccessLevel;
 
-	// Live PASC state: true once the backend reports system-pasc and the lookup
-	// entry exists. The mock preview above stays for builds without it.
 	const pascLive = $derived(userStatus?.has('system-pasc') ?? false);
 	const pascResult = $derived(userStatus?.get('system-pasc') ?? null);
 
 	const pascDisplayRecord = $derived.by((): PascRecord | null => {
+		// A saved/refreshed result wins so the tab reflects writes immediately.
+		// A live lookup only counts when it actually carries a record; a miss
+		// (even one whose marker wording changed) must render the referral.
 		const data =
-			pascSavedStatus ?? (isGroup ? undefined : (pascResult?.data as UserStatus | undefined));
+			pascSavedStatus ??
+			(isGroup || !isPascRecordPresent(pascResult)
+				? undefined
+				: (pascResult?.data as UserStatus | undefined));
 		if (!data) return null;
 		const mapped = mapPascUserStatus(data, {
 			userId: sanitizedUserId,
@@ -384,13 +371,10 @@
 	});
 
 	const pascHeaderBadge = $derived.by(() => {
-		if (!pascLive) {
-			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[MOCK_PASC_RECORD.flag]];
-			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
-		}
-		const data = isGroup ? undefined : (pascResult?.data as UserStatus | undefined);
-		if (data && isPascRecordPresent(pascResult)) {
-			const presentation = STATUS_FLAG_PRESENTATION[data.flagType];
+		// Drive the header from the same record the tab renders, not the raw
+		// lookup result: after a save/refresh the old result is stale.
+		if (pascDisplayRecord) {
+			const presentation = STATUS_FLAG_PRESENTATION[PASC_FLAG_TO_NUMERIC[pascDisplayRecord.flag]];
 			return { badgeClass: presentation.badgeClass, textKey: presentation.textKey };
 		}
 		const referral = pascReferral;
@@ -413,13 +397,18 @@
 	$effect(() => {
 		void userId;
 		pascSavedStatus = null;
+		// A tooltip instance can be reused across users; never carry an open
+		// editor (with its per-record draft state) to the next user.
+		pascEditing = false;
 	});
 
 	async function refreshPasc() {
 		const api = getEnabledCustomApis().find((entry) => entry.id === 'system-pasc');
 		if (!api) return;
 		try {
-			pascSavedStatus = await apiClient.checkUser(sanitizedUserId, { apiConfig: api });
+			const status = await apiClient.checkUser(sanitizedUserId, { apiConfig: api });
+			pascSavedStatus = status;
+			onStatusUpdate?.(status);
 		} catch (error) {
 			logger.warn('[PASC] Refresh after write failed:', error);
 		}
@@ -428,6 +417,7 @@
 	function handlePascSaved(status: UserStatus) {
 		pascSavedStatus = status;
 		pascEditing = false;
+		onStatusUpdate?.(status);
 	}
 
 	$effect(() => {
@@ -1538,106 +1528,65 @@
 			{extractErrorMessage(activeError)}
 		</div>
 	{:else if activeTab === 'system-pasc'}
-		{#if pascLive}
-			{#if pascResult?.loading}
-				<div class="flex items-center justify-center gap-2 py-2">
-					<LoadingSpinner size="small" />
-					<span class="text-xs">{$_('tooltip_loading_user_info')}</span>
-				</div>
-			{:else if pascDisplayRecord}
-				<PascDisplay
-					canEdit={$pascCanEdit && pascDisplayRecord.accessLevel !== null}
-					discordAccounts={pascDiscordAccounts}
-					onEdit={() => (pascEditing = true)}
-					onRefresh={refreshPasc}
-					record={pascDisplayRecord}
-					requestsEnabled
-					userId={sanitizedUserId}
-					viewerLevel={$pascClearanceLevel}
-				/>
-				{#if pascEditing && pascDisplayRecord.accessLevel !== null}
-					<div
-						class="modal-overlay visible"
-						aria-label="Edit PASC record"
-						aria-modal="true"
-						onclick={(event) => event.stopPropagation()}
-						onkeydown={(event) => {
-							if (event.key === 'Escape') pascEditing = false;
-						}}
-						role="dialog"
-						tabindex="-1"
-					>
-						<PascEditModal
-							mode="edit"
-							onClose={() => (pascEditing = false)}
-							onRefresh={refreshPasc}
-							onSaved={handlePascSaved}
-							record={pascDisplayRecord}
-						/>
-					</div>
-				{/if}
-			{:else}
-				<PascDisplay
-					canEdit={$pascCanEdit}
-					discordAccounts={pascDiscordAccounts}
-					displayName={userDisplayName ?? userInfo?.displayName}
-					draftRecord={pascDraft}
-					onEdit={() => (pascEditing = true)}
-					providerVerdicts={liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)}
-					record={null}
-					referral={pascReferral}
-					requestsEnabled
-					userId={sanitizedUserId}
-					username={userUsername ?? userInfo?.username}
-					viewerLevel={$pascClearanceLevel}
-				/>
-				{#if pascEditing && pascDraft}
-					<div
-						class="modal-overlay visible"
-						aria-label="Create PASC record"
-						aria-modal="true"
-						onclick={(event) => event.stopPropagation()}
-						onkeydown={(event) => {
-							if (event.key === 'Escape') pascEditing = false;
-						}}
-						role="dialog"
-						tabindex="-1"
-					>
-						<PascEditModal
-							mode="create"
-							onClose={() => (pascEditing = false)}
-							onRefresh={refreshPasc}
-							onSaved={handlePascSaved}
-							record={pascDraft}
-						/>
-					</div>
-				{/if}
-			{/if}
-		{:else}
-			<!-- MOCK ONLY — PASC tab content renders mock data until the backend reports
-			     system-pasc. Intentionally ungated: remove this branch together with
-			     the tab entry once the real provider ships. -->
+		{#if pascResult?.loading}
+			<div class="flex items-center justify-center gap-2 py-2">
+				<LoadingSpinner size="small" />
+				<span class="text-xs">{$_('tooltip_loading_user_info')}</span>
+			</div>
+		{:else if pascDisplayRecord}
 			<PascDisplay
-				canEdit
-				discordAccounts={MOCK_PASC_DISCORD_ACCOUNTS}
+				canEdit={$pascCanEdit && pascDisplayRecord.accessLevel !== null}
+				discordAccounts={pascDiscordAccounts}
 				onEdit={() => (pascEditing = true)}
-				record={MOCK_PASC_RECORD}
-				userId={MOCK_PASC_RECORD.userId}
-				viewerLevel={pascViewerLevel}
+				onRefresh={refreshPasc}
+				record={pascDisplayRecord}
+				requestsEnabled
+				userId={sanitizedUserId}
+				viewerLevel={$pascClearanceLevel}
 			/>
-			{#if pascEditing}
+			{#if pascEditing && pascDisplayRecord.accessLevel !== null}
 				<div
 					class="modal-overlay visible"
-					aria-label="Edit PASC record"
-					aria-modal="true"
 					onclick={(event) => event.stopPropagation()}
-					onkeydown={(event) => {
-						if (event.key === 'Escape') pascEditing = false;
-					}}
-					role="dialog"
-					tabindex="-1"
+					role="presentation"
 				>
-					<PascEditModal onClose={() => (pascEditing = false)} record={MOCK_PASC_RECORD} />
+					<PascEditModal
+						mode="edit"
+						onClose={() => (pascEditing = false)}
+						onRefresh={refreshPasc}
+						onSaved={handlePascSaved}
+						record={pascDisplayRecord}
+					/>
+				</div>
+			{/if}
+		{:else}
+			<PascDisplay
+				canEdit={$pascCanEdit}
+				discordAccounts={pascDiscordAccounts}
+				displayName={userDisplayName ?? userInfo?.displayName}
+				draftRecord={pascDraft}
+				onEdit={() => (pascEditing = true)}
+				providerVerdicts={liveProviderVerdicts(userStatus as CombinedStatus<UserStatus>)}
+				record={null}
+				referral={pascReferral}
+				requestsEnabled
+				userId={sanitizedUserId}
+				username={userUsername ?? userInfo?.username}
+				viewerLevel={$pascClearanceLevel}
+			/>
+			{#if pascEditing && pascDraft}
+				<div
+					class="modal-overlay visible"
+					onclick={(event) => event.stopPropagation()}
+					role="presentation"
+				>
+					<PascEditModal
+						mode="create"
+						onClose={() => (pascEditing = false)}
+						onRefresh={refreshPasc}
+						onSaved={handlePascSaved}
+						record={pascDraft}
+					/>
 				</div>
 			{/if}
 		{/if}
@@ -2234,9 +2183,8 @@
 									</div>
 									{#if activeTab === 'system-pasc'}
 										<!-- Same badge component as the other provider tabs, driven by
-										     the live PASC flag (or the referral while there is no
-										     record). Mock preview below until whoami reports
-										     system-pasc. -->
+										     the live PASC verdict (or the referral while there is no
+										     record). -->
 										{@const headerBadge = pascHeaderBadge}
 										{#if headerBadge}
 											<div class="tooltip-status-badge {headerBadge.badgeClass}">

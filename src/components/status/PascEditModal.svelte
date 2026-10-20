@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import {
 		File as FileIcon,
 		FileText,
@@ -15,6 +16,8 @@
 	import { apiClient } from '@/lib/services/rotector/api-client';
 	import type { UserStatus } from '@/lib/types/api';
 	import { pascFileKind } from '@/lib/utils/status/pasc-record';
+	import { PASC_FILE_LIMITS } from '@/lib/types/constants';
+	import { trapFocus } from '@/lib/utils/dom/focus-trap';
 	import {
 		PASC_ACCESS_RANK,
 		PASC_FLAG_LABELS,
@@ -23,11 +26,10 @@
 		type PascCaseFile,
 		type PascFlag,
 		type PascRecord
-	} from '@/lib/data/pasc-mock';
+	} from '@/lib/data/pasc';
 
 	// PASC record editing window. Renders inside the shared modal shell. Save
 	// upserts through the RoProtect proxy; file attach uploads through it too.
-	// The mock harness feeds it mock records with stub callbacks.
 
 	interface Props {
 		record: PascRecord;
@@ -57,7 +59,8 @@
 		unsafe: 'unsafe',
 		flagged: 'pending',
 		queued: 'queued',
-		redacted: 'redacted'
+		redacted: 'redacted',
+		unknown: 'unknown'
 	};
 	const FLAG_COLORS: Record<PascFlag, string> = {
 		safe: 'var(--color-success)',
@@ -67,20 +70,29 @@
 		unsafe: 'var(--color-status-unsafe)',
 		flagged: 'var(--color-status-pending)',
 		queued: 'var(--color-status-queued)',
-		redacted: 'var(--color-status-error)'
+		redacted: 'var(--color-status-error)',
+		unknown: 'var(--color-status-pending)'
 	};
 	const LEVELS = Object.keys(PASC_ACCESS_RANK) as PascAccessLevel[];
 	const LEVEL_OPTIONS = LEVELS.map((level) => ({ value: level, label: `${level}+` }));
 	const FILE_LEVEL_OPTIONS = LEVELS.map((level) => ({ value: level, label: level }));
-	const REVIEWER_LEVEL_OPTIONS = LEVELS.filter(
-		(level) => PASC_ACCESS_RANK[level] >= PASC_ACCESS_RANK.M1
-	).map((level) => ({ value: level, label: `${level}+` }));
 
 	let flag = $state<PascFlag>(untrack(() => record.flag));
 	let publicNote = $state(untrack(() => record.publicNote));
+	// Two independent fields: who may open the record at all, and who may read
+	// its public note. The internal floor has no server field (always M1+).
+	let recordLevel = $state<PascAccessLevel>(untrack(() => record.accessLevel ?? 'A2'));
 	let publicNoteLevel = $state<PascAccessLevel>(untrack(() => record.accessLevel ?? 'A2'));
 	let internalReview = $state(untrack(() => record.internalReview));
-	let internalMinLevel = $state<PascAccessLevel>(untrack(() => record.internalReviewMinLevel));
+
+	// Snapshot for the dirty check so closing cannot silently discard edits.
+	const initial = untrack(() => ({
+		flag: record.flag,
+		publicNote: record.publicNote,
+		recordLevel: record.accessLevel ?? 'A2',
+		publicNoteLevel: record.accessLevel ?? 'A2',
+		internalReview: record.internalReview
+	}));
 
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
@@ -95,11 +107,27 @@
 	);
 	let extraFiles = $state<PascCaseFile[]>([]);
 	let fileInput = $state<HTMLInputElement | null>(null);
+	let showDiscardConfirm = $state(false);
 
-	const FILE_KIND_LABELS: Record<PascCaseFile['kind'], string> = {
-		markdown: 'Markdown',
-		image: 'Image',
-		other: 'File'
+	const title = $derived(
+		$_(mode === 'create' ? 'pasc_edit_title_create' : 'pasc_edit_title_edit', {
+			values: { 0: record.userId }
+		})
+	);
+
+	const dirty = $derived(
+		flag !== initial.flag ||
+			publicNote !== initial.publicNote ||
+			recordLevel !== initial.recordLevel ||
+			publicNoteLevel !== initial.publicNoteLevel ||
+			internalReview !== initial.internalReview ||
+			extraFiles.length > 0
+	);
+
+	const FILE_KIND_KEYS: Record<PascCaseFile['kind'], string> = {
+		markdown: 'pasc_file_kind_markdown',
+		image: 'pasc_file_kind_image',
+		other: 'pasc_file_kind_other'
 	};
 
 	// The lookup refresh after an upload returns the new file too. Merge both
@@ -119,8 +147,13 @@
 
 	const uploadLabel = $derived(
 		uploadProgress
-			? `Uploading ${String(uploadProgress.current)}/${String(uploadProgress.total)}…`
-			: 'Attach files'
+			? $_('pasc_file_uploading', {
+					values: {
+						0: String(uploadProgress.current),
+						1: String(uploadProgress.total)
+					}
+				})
+			: $_('pasc_file_attach')
 	);
 
 	// Once the refreshed record owns an upload, drop the local pending copy.
@@ -143,17 +176,25 @@
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
+	function attemptClose(): void {
+		if (dirty) {
+			showDiscardConfirm = true;
+			return;
+		}
+		onClose();
+	}
+
 	async function save() {
 		if (saving) return;
 		saving = true;
 		saveError = null;
 		try {
 			// Only flag is validated proxy-side; the rest passes through to the
-			// PASC record schema verbatim. internalReviewMinLevel has no server
-			// field (the floor is always M1), so it is not sent.
+			// PASC record schema verbatim. internalReview has no configurable
+			// visibility (the floor is always M1+), so no level is sent for it.
 			const status = await apiClient.upsertPascRecord(record.userId, {
 				flag: PASC_FLAG_TO_NUMERIC[flag],
-				accessLevel: publicNoteLevel,
+				accessLevel: recordLevel,
 				publicNote,
 				publicNoteLevel,
 				internalReview
@@ -176,9 +217,42 @@
 		uploadError = null;
 		const uploaded: PascCaseFile[] = [];
 		const errors: string[] = [];
+
+		if (selected.length > PASC_FILE_LIMITS.MAX_FILES - allFiles.length) {
+			uploadError = $_('pasc_file_error_count_total', {
+				values: { 0: String(PASC_FILE_LIMITS.MAX_FILES) }
+			});
+			uploading = false;
+			return;
+		}
+
+		// Enforce size before reading anything into memory.
+		const accepted: File[] = [];
+		let totalBytes = 0;
+		for (const file of selected) {
+			if (file.size > PASC_FILE_LIMITS.MAX_BYTES) {
+				errors.push(
+					$_('pasc_file_error_too_large', {
+						values: { 0: file.name, 1: formatSize(PASC_FILE_LIMITS.MAX_BYTES) }
+					})
+				);
+				continue;
+			}
+			totalBytes += file.size;
+			if (totalBytes > PASC_FILE_LIMITS.MAX_TOTAL_BYTES) {
+				errors.push(
+					$_('pasc_file_error_total', {
+						values: { 0: formatSize(PASC_FILE_LIMITS.MAX_TOTAL_BYTES) }
+					})
+				);
+				break;
+			}
+			accepted.push(file);
+		}
+
 		try {
-			for (const [index, file] of selected.entries()) {
-				uploadProgress = { current: index + 1, total: selected.length };
+			for (const [index, file] of accepted.entries()) {
+				uploadProgress = { current: index + 1, total: accepted.length };
 				try {
 					const bytes = await file.arrayBuffer();
 					const descriptor = await apiClient.uploadPascFile(
@@ -203,8 +277,7 @@
 						kind: pascFileKind(name),
 						accessLevel: newFileLevel,
 						sizeLabel: formatSize(descriptor.size),
-						fileId: descriptor.fileId,
-						mockPreview: undefined
+						fileId: descriptor.fileId
 					});
 				} catch (error) {
 					errors.push(`${file.name}: ${error instanceof Error ? error.message : String(error)}`);
@@ -215,9 +288,13 @@
 				onRefresh?.();
 			}
 			if (errors.length > 0) {
-				const firstError = errors[0] ?? 'File upload failed';
+				const firstError = errors[0] ?? $_('pasc_file_error_generic');
 				uploadError =
-					errors.length === 1 ? firstError : `${firstError} (+${String(errors.length - 1)} more)`;
+					errors.length === 1
+						? firstError
+						: `${firstError} ${$_('pasc_file_error_more', {
+								values: { 0: String(errors.length - 1) }
+							})}`;
 			}
 		} finally {
 			uploading = false;
@@ -252,25 +329,36 @@
 
 <div
 	class="modal-popup modal-popup-wide"
+	aria-label={title}
+	aria-modal="true"
 	onkeydown={(event) => {
 		// Keep host-page and tooltip shortcuts (Space/Enter activation, dismiss
 		// keys) from swallowing keystrokes typed into the modal's editors.
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			attemptClose();
+		}
 		event.stopPropagation();
 	}}
-	role="presentation"
+	role="dialog"
+	tabindex="-1"
+	use:trapFocus
 >
 	<div class="modal-header">
-		<h3 class="modal-title">
-			{mode === 'create' ? 'Create' : 'Edit'} PASC record · {record.userId}
-		</h3>
-		<button class="modal-close" aria-label="Close" onclick={onClose} type="button">
+		<h3 class="modal-title">{title}</h3>
+		<button
+			class="modal-close"
+			aria-label={$_('pasc_modal_close')}
+			onclick={attemptClose}
+			type="button"
+		>
 			<X size={16} />
 		</button>
 	</div>
 	<div style:padding="0 1.125rem" class="pasc-container pasc-modal-body">
 		<div class="pasc-field">
-			<span class="pasc-field-label">Flag</span>
-			<div class="pasc-flag-options" aria-label="Flag" role="radiogroup">
+			<span class="pasc-field-label">{$_('pasc_edit_flag')}</span>
+			<div class="pasc-flag-options" aria-label={$_('pasc_edit_flag')} role="radiogroup">
 				{#each FLAGS as option (option)}
 					<button
 						class="pasc-flag-option"
@@ -280,17 +368,27 @@
 						type="button"
 					>
 						<StatusIcon name={FLAG_ICONS[option]} color={FLAG_COLORS[option]} size={13} />
-						{PASC_FLAG_LABELS[option]}
+						{$_(PASC_FLAG_LABELS[option])}
 					</button>
 				{/each}
 			</div>
 		</div>
 		<div class="pasc-field">
 			<div class="pasc-field-row">
-				<span class="pasc-field-label">Public note</span>
-				<span class="pasc-meta">visible to</span>
+				<span class="pasc-field-label">{$_('pasc_edit_record_visibility')}</span>
 				<Select
-					ariaLabel="Public note visibility"
+					ariaLabel={$_('pasc_edit_record_visibility')}
+					options={LEVEL_OPTIONS}
+					bind:value={recordLevel}
+				/>
+			</div>
+		</div>
+		<div class="pasc-field">
+			<div class="pasc-field-row">
+				<span class="pasc-field-label">{$_('pasc_edit_public_note')}</span>
+				<span class="pasc-meta">{$_('pasc_edit_visible_to')}</span>
+				<Select
+					ariaLabel={$_('pasc_edit_public_note_visibility')}
 					options={LEVEL_OPTIONS}
 					bind:value={publicNoteLevel}
 				/>
@@ -299,27 +397,22 @@
 		</div>
 		<div class="pasc-field">
 			<div class="pasc-field-row">
-				<span class="pasc-field-label">Internal review</span>
-				<span class="pasc-meta">minimum M1+, visible to</span>
-				<Select
-					ariaLabel="Internal review visibility"
-					options={REVIEWER_LEVEL_OPTIONS}
-					bind:value={internalMinLevel}
-				/>
+				<span class="pasc-field-label">{$_('pasc_edit_internal_review')}</span>
+				<span class="pasc-meta">{$_('pasc_edit_internal_visibility')}</span>
 			</div>
 			<PascMarkdownEditor bind:value={internalReview} />
 		</div>
 		<div class="pasc-field">
 			<div class="pasc-field-row">
-				<span class="pasc-field-label">Case files</span>
+				<span class="pasc-field-label">{$_('pasc_edit_case_files')}</span>
 				<span class="pasc-file-count">{allFiles.length}</span>
 			</div>
 
 			<div class="pasc-upload">
 				<div class="pasc-upload-row">
-					<span class="pasc-file-level-label">New files visible to</span>
+					<span class="pasc-file-level-label">{$_('pasc_edit_new_files_visible')}</span>
 					<Select
-						ariaLabel="New file visibility"
+						ariaLabel={$_('pasc_edit_new_files_visible')}
 						disabled={uploading}
 						options={FILE_LEVEL_OPTIONS}
 						bind:value={newFileLevel}
@@ -334,9 +427,7 @@
 						{uploadLabel}
 					</button>
 				</div>
-				<span class="pasc-upload-hint">
-					Markdown, text, or images · select more than one file at a time
-				</span>
+				<span class="pasc-upload-hint">{$_('pasc_edit_upload_hint')}</span>
 			</div>
 
 			{#if allFiles.length > 0}
@@ -354,31 +445,33 @@
 							</span>
 							<span class="pasc-file-name" title={file.name}>{file.name}</span>
 							<span class="pasc-file-meta">
-								{FILE_KIND_LABELS[file.kind]}{file.sizeLabel ? ` · ${file.sizeLabel}` : ''}
+								{$_(FILE_KIND_KEYS[file.kind])}{file.sizeLabel ? ` · ${file.sizeLabel}` : ''}
 							</span>
-							<span class="pasc-file-level" title="Visibility was set when this file was uploaded">
+							<span class="pasc-file-level" title={$_('pasc_edit_file_level_hint')}>
 								{file.accessLevel}
 							</span>
 							{#if file.fileId}
 								<button
 									class="pasc-file-delete"
 									aria-label={confirmingDeleteId === file.id
-										? `Confirm delete ${file.name}`
-										: `Delete ${file.name}`}
+										? $_('pasc_file_confirm_delete_aria', { values: { 0: file.name } })
+										: $_('pasc_file_delete_aria', { values: { 0: file.name } })}
 									disabled={deletingFile}
 									onclick={() => void deleteModalFile(file)}
-									title={confirmingDeleteId === file.id ? 'Click again to confirm' : 'Delete file'}
+									title={confirmingDeleteId === file.id
+										? $_('pasc_file_confirm_delete_title')
+										: $_('pasc_file_delete_title')}
 									type="button"
 								>
 									<Trash2 size={12} />
-									{confirmingDeleteId === file.id ? 'Sure?' : 'Delete'}
+									{confirmingDeleteId === file.id ? $_('pasc_file_sure') : $_('pasc_file_delete')}
 								</button>
 							{/if}
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<p class="pasc-file-empty">No case files attached yet.</p>
+				<p class="pasc-file-empty">{$_('pasc_edit_no_files')}</p>
 			{/if}
 
 			<input
@@ -399,11 +492,25 @@
 		{#if saveError}
 			<p class="pasc-meta">{saveError}</p>
 		{/if}
-		<div class="pasc-modal-actions">
-			<button class="pasc-edit-button" onclick={onClose} type="button">Cancel</button>
-			<button class="pasc-edit-button" disabled={saving} onclick={save} type="button">
-				{saving ? 'Saving…' : 'Save record'}
-			</button>
-		</div>
+		{#if showDiscardConfirm}
+			<div class="pasc-modal-actions">
+				<span class="pasc-meta">{$_('pasc_edit_discard_message')}</span>
+				<button class="pasc-edit-button" onclick={() => (showDiscardConfirm = false)} type="button">
+					{$_('pasc_edit_discard_cancel')}
+				</button>
+				<button class="pasc-edit-button" onclick={onClose} type="button">
+					{$_('pasc_edit_discard_confirm')}
+				</button>
+			</div>
+		{:else}
+			<div class="pasc-modal-actions">
+				<button class="pasc-edit-button" onclick={attemptClose} type="button">
+					{$_('pasc_modal_cancel')}
+				</button>
+				<button class="pasc-edit-button" disabled={saving} onclick={save} type="button">
+					{saving ? $_('pasc_edit_saving') : $_('pasc_edit_save')}
+				</button>
+			</div>
+		{/if}
 	</div>
 </div>

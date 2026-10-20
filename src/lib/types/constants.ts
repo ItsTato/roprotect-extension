@@ -77,6 +77,9 @@ export const API_CONFIG = {
 		TASE_V2_BATCH_CHECK: '/v1/tase/v2/lookup/users',
 		// Discord avatar endpoint
 		DISCORD_AVATAR_BATCH: '/v1/discord/v1/get_user_avatar_link',
+		// Discord portal (unauthenticated, CORS-open): pair + one-time key handoff
+		OAUTH_PAIR: '/oauth/pair',
+		OAUTH_POLL: '/oauth/poll',
 		// Viewer PASC clearance (proxied; see endpoints/pasc.ts)
 		PASC_CLEARANCE: '/v1/pasc/v1/clearance',
 		// PASC record + file routes (proxied; user id appended by the caller)
@@ -88,13 +91,25 @@ export const API_CONFIG = {
 	BATCH_DELAY: 250,
 	MAX_RETRIES: 3,
 	RETRY_DELAY: 1000,
-	TIMEOUT: 30_000,
+	TIMEOUT: 10_000,
 	EXPORT_TIMEOUT: 30_000,
 	QUEUE_POLL_INTERVAL: 30_000,
-	PROGRESSIVE_API_TIMEOUT: 30_000,
+	PROGRESSIVE_API_TIMEOUT: 15_000,
 	OUTFIT_SNAPSHOT_MAX_ITEMS: 50,
 	TRANSLATION_CACHE_MAX: 100,
 	TRANSLATION_CACHE_TTL: 60 * 60 * 1000
+} as const;
+
+// PASC case-file transfer limits. Base64 inflates bytes by 4/3, so the schema
+// cap is derived from the byte cap rather than duplicated as a magic number.
+const PASC_FILE_MAX_BYTES = 5 * 1024 * 1024;
+export const PASC_FILE_LIMITS = {
+	MAX_BYTES: PASC_FILE_MAX_BYTES,
+	MAX_TOTAL_BYTES: 10 * 1024 * 1024,
+	MAX_FILES: 5,
+	MAX_BASE64_LENGTH: Math.ceil(PASC_FILE_MAX_BYTES / 3) * 4,
+	MAX_CONTENT_TYPE_LENGTH: 128,
+	TIMEOUT: 30_000
 } as const;
 
 // API Actions for message passing
@@ -121,6 +136,8 @@ export const API_ACTIONS = {
 	HAS_TRANSLATE_PERMISSION: 'hasTranslatePermission',
 	REQUEST_TRANSLATE_PERMISSION: 'requestTranslatePermission',
 	API_WHOAMI: 'apiWhoami',
+	OAUTH_START: 'oauthStart',
+	OAUTH_POLL: 'oauthPoll',
 	GET_DISCORD_AVATARS: 'getDiscordAvatars',
 	GET_PASC_CLEARANCE: 'getPascClearance',
 	PASC_UPSERT_RECORD: 'pascUpsertRecord',

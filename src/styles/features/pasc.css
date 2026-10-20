@@ -383,12 +383,6 @@
 	color: var(--color-text);
 }
 
-@utility pasc-mock-banner {
-	@apply rounded-md border border-dashed px-2 py-1 text-[11px]!;
-	border-color: var(--color-border);
-	color: var(--color-text-subtle);
-}
-
 /* ---- Linked Discord (RoWifi) ---- */
 
 @utility pasc-discord {

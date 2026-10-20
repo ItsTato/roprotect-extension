@@ -24,7 +24,9 @@ export class PageControllerManager {
 		(pageType: PageType, url: string) => PageController
 	>();
 	private currentUrl: string | null = null;
-	private isNavigating = false;
+	private navigationRunning = false;
+	private pendingNavigation: string | null = null;
+	private generation = 0;
 
 	constructor() {
 		this.controllers.set(
@@ -88,12 +90,33 @@ export class PageControllerManager {
 	}
 
 	async handleNavigation(url: string): Promise<void> {
-		if (this.isNavigating) {
-			logger.debug('Navigation already in progress, skipping');
-			return;
-		}
+		// Keep only the latest URL. A slow activation must never finish after a
+		// newer navigation and mount a controller for the stale page.
+		this.pendingNavigation = url;
+		if (this.navigationRunning) return;
 
-		this.isNavigating = true;
+		this.navigationRunning = true;
+		try {
+			while (this.pendingNavigation !== null) {
+				const nextUrl = this.pendingNavigation;
+				this.pendingNavigation = null;
+				await this.navigate(nextUrl, this.generation);
+			}
+		} finally {
+			this.navigationRunning = false;
+		}
+	}
+
+	// Tears the active controller down without starting another navigation.
+	// Used when the content-script feature gate closes. Bumping the generation
+	// invalidates an in-flight navigation so it cannot mount afterwards.
+	async deactivate(): Promise<void> {
+		this.generation++;
+		this.pendingNavigation = null;
+		await this.cleanupCurrentController();
+	}
+
+	private async navigate(url: string, generation: number): Promise<void> {
 		const endTrace = startTrace(TRACE_CATEGORIES.CONTROLLER, 'handleNavigation', { url });
 		try {
 			const sanitizedUrl = sanitizeUrl(url);
@@ -101,24 +124,30 @@ export class PageControllerManager {
 				logger.warn('Invalid URL provided to handleNavigation');
 				return;
 			}
+			if (generation !== this.generation) return;
 
 			const pageType = detectPageType(sanitizedUrl);
 
 			await (pageType && this.controllers.has(pageType)
-				? this.switchToController(pageType, sanitizedUrl)
+				? this.switchToController(pageType, sanitizedUrl, generation)
 				: this.cleanupCurrentController());
 		} catch (error) {
 			logger.error('Failed to handle navigation:', error, { url });
 		} finally {
 			endTrace();
-			this.isNavigating = false;
 			metricsCollector.takeSnapshot('navigation');
 		}
 	}
 
-	private async switchToController(pageType: PageType, url: string): Promise<void> {
+	private async switchToController(
+		pageType: PageType,
+		url: string,
+		generation: number
+	): Promise<void> {
 		const endTrace = startTrace(TRACE_CATEGORIES.CONTROLLER, 'switchToController', { pageType });
 		try {
+			if (generation !== this.generation) return;
+
 			if (
 				this.currentController &&
 				(this.currentController.pageType !== pageType ||
@@ -126,6 +155,7 @@ export class PageControllerManager {
 			) {
 				await this.cleanupCurrentController();
 			}
+			if (generation !== this.generation) return;
 
 			if (!this.currentController) {
 				const factory = this.controllers.get(pageType);
@@ -139,6 +169,9 @@ export class PageControllerManager {
 			}
 
 			await this.currentController.initialize();
+
+			// Deactivated while initialize() was running: remove what it mounted.
+			if (generation !== this.generation) await this.cleanupCurrentController();
 		} catch (error) {
 			logger.error(`Failed to switch to controller for ${pageType}:`, error);
 			await this.cleanupCurrentController();

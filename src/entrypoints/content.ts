@@ -1,5 +1,5 @@
 import '../styles/index.css';
-import { mount } from 'svelte';
+import { mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
@@ -71,6 +71,13 @@ export default defineContentScript({
 		try {
 			logger.info('Rotector content script initializing...');
 
+			// Privacy first: blur supported pages before any async storage/API
+			// work. The per-setting pass below replaces this default stylesheet
+			// once settings are loaded.
+			if (detectPageType(globalThis.location.href) !== null) {
+				injectDefaultBlurStyles();
+			}
+
 			logger.debug('Loading stored language preference...');
 			await loadStoredLanguagePreference();
 			logger.debug('Language preference loaded successfully');
@@ -78,6 +85,10 @@ export default defineContentScript({
 			logger.debug('Initializing settings...');
 			await initializeSettings();
 			logger.debug('Settings loaded successfully');
+
+			if (detectPageType(globalThis.location.href) !== null) {
+				injectBlurStyles();
+			}
 
 			logger.debug('Loading custom APIs configuration...');
 			await loadCustomApis();
@@ -108,82 +119,160 @@ export default defineContentScript({
 
 			// Pages without extension features (settings, game details, ...) get a
 			// zero visual footprint: no overlay, no injected styles, no controllers.
-			// Navigation is still watched so SPA transitions onto a supported page
-			// initialize lazily without requiring a full reload.
-			const pageManager = new PageControllerManager();
-			logger.debug('Page controller manager initialized');
+			// The manager is created lazily only once the feature gate opens.
+			let pageManager: PageControllerManager | null = null;
+			const ensurePageManager = (): PageControllerManager => {
+				pageManager ??= new PageControllerManager();
+				return pageManager;
+			};
 
 			type Overlay = Awaited<ReturnType<typeof createShadowRootUi>>;
 			let overlay: Overlay | null = null;
+			let overlayApp: ReturnType<typeof mount> | null = null;
 			let visualsActive = false;
+			let activation: Promise<void> | null = null;
+			let activationEpoch = 0;
 			let telemetryStarted = false;
 			let currentUrl = globalThis.location.href;
+			let navigationToken = 0;
+			let listenersInstalled = false;
+
+			// Activation is async (CSS fetch + shadow mount). Each call captures an
+			// epoch; deactivateVisuals bumps it so an in-flight mount cannot finish
+			// after teardown and leave `visualsActive` true with no overlay attached.
+			function visualsAreActive(): boolean {
+				return visualsActive;
+			}
 
 			async function activateVisuals(): Promise<void> {
-				if (visualsActive) return;
-				visualsActive = true;
+				if (visualsAreActive()) return;
+				if (activation) {
+					await activation;
+					if (visualsAreActive()) return;
+					// Previous activation was superseded (or failed); retry below.
+				}
 
-				injectDefaultBlurStyles();
-				injectBlurStyles();
-				logger.debug('Blur styles injected');
+				const epoch = ++activationEpoch;
+				activation = (async () => {
+					injectDefaultBlurStyles();
+					injectBlurStyles();
+					logger.debug('Blur styles injected');
 
-				if (!overlay) {
-					const cssUrl = browser.runtime.getURL(
-						'/content-scripts/content.css' as Parameters<typeof browser.runtime.getURL>[0]
-					);
-					const cssResponse = await fetch(cssUrl);
-					const shadowCssRaw = await cssResponse.text();
-					const cssText = shadowCssRaw.replaceAll(':root', ':host');
+					if (!overlay) {
+						const cssUrl = browser.runtime.getURL(
+							'/content-scripts/content.css' as Parameters<typeof browser.runtime.getURL>[0]
+						);
+						const cssResponse = await fetch(cssUrl);
+						const shadowCssRaw = await cssResponse.text();
+						const cssText = shadowCssRaw.replaceAll(':root', ':host');
 
-					overlay = await createShadowRootUi(ctx, {
-						name: 'rotector-overlay',
-						position: 'overlay',
-						zIndex: 10_000,
-						css: cssText,
-						onMount(uiContainer, _shadow, shadowHost) {
-							registerOverlayContainer(uiContainer);
-							themeManager.registerPortalContainer(shadowHost);
+						overlay = await createShadowRootUi(ctx, {
+							name: 'rotector-overlay',
+							position: 'overlay',
+							zIndex: 10_000,
+							css: cssText,
+							onMount(uiContainer, _shadow, shadowHost) {
+								registerOverlayContainer(uiContainer);
+								themeManager.registerPortalContainer(shadowHost);
 
-							// Register inner html element so [data-theme] CSS selectors
-							// match inside the shadow root (bare attribute selectors
-							// don't match the shadow host from within shadow CSS)
-							const shadowHtml = _shadow.querySelector('html');
-							if (shadowHtml) themeManager.registerPortalContainer(shadowHtml);
+								// Register inner html element so [data-theme] CSS selectors
+								// match inside the shadow root (bare attribute selectors
+								// don't match the shadow host from within shadow CSS)
+								const shadowHtml = _shadow.querySelector('html');
+								if (shadowHtml) themeManager.registerPortalContainer(shadowHtml);
 
-							mount(OverlayRoot, { target: uiContainer });
-							logger.debug('Shadow root overlay mounted');
-							return uiContainer;
-						},
-						onRemove() {
-							logger.debug('Shadow root overlay removed');
-						}
+								overlayApp = mount(OverlayRoot, { target: uiContainer });
+								logger.debug('Shadow root overlay mounted');
+							},
+							onRemove() {
+								// Safety net for removals not initiated by deactivateVisuals.
+								const app = overlayApp;
+								overlayApp = null;
+								if (app) void unmount(app);
+								logger.debug('Shadow root overlay removed');
+							}
+						});
+					}
+					overlay.mount();
+
+					// Teardown (gate close / unsupported navigation) won while the
+					// stylesheet or mount was pending: discard this activation.
+					if (epoch !== activationEpoch) {
+						const staleOverlay = overlay;
+						overlay = null;
+						staleOverlay.remove();
+						return;
+					}
+
+					// Only mark active once the stylesheet fetch and mount succeeded, so a
+					// failed activation can be retried on the next navigation.
+					visualsActive = true;
+
+					if (!telemetryStarted) {
+						telemetryStarted = true;
+						void computeAndCacheDeviceFingerprint();
+						metricsCollector.start();
+					}
+				})()
+					.catch((error: unknown) => {
+						removeBlurStyles();
+						throw error;
+					})
+					.finally(() => {
+						activation = null;
 					});
-				}
-				overlay.mount();
-
-				if (!telemetryStarted) {
-					telemetryStarted = true;
-					void computeAndCacheDeviceFingerprint();
-					metricsCollector.start();
-				}
+				await activation;
 			}
 
 			function deactivateVisuals(): void {
-				if (!visualsActive) return;
+				activationEpoch++;
 				visualsActive = false;
 				removeBlurStyles();
-				overlay?.remove();
+
+				const app = overlayApp;
+				overlayApp = null;
+				if (app) void unmount(app);
+
+				const currentOverlay = overlay;
+				overlay = null;
+				currentOverlay?.remove();
 				logger.debug('Visuals deactivated for unsupported page');
 			}
 
 			async function handleUrl(url: string): Promise<void> {
+				const token = ++navigationToken;
+
+				// The gate is part of the URL contract: SPA navigation must not
+				// bypass onboarding/API-key state.
+				if (!get(extensionFeaturesEnabled)) {
+					deactivateVisuals();
+					return;
+				}
+
 				if (detectPageType(url) === null) {
 					deactivateVisuals();
-				} else {
-					await activateVisuals();
+					await pageManager?.deactivate();
+					return;
 				}
-				await pageManager.handleNavigation(url);
+
+				await activateVisuals();
+
+				// Gate closed while activation was pending: no visuals may survive.
+				if (!get(extensionFeaturesEnabled)) {
+					deactivateVisuals();
+					return;
+				}
+				// A newer navigation owns the overlay/controller now.
+				if (token !== navigationToken) return;
+
+				await ensurePageManager().handleNavigation(url);
 			}
+
+			const navigate = (url: string): void => {
+				void handleUrl(url).catch((error: unknown) => {
+					logger.error('Failed to handle navigation:', error, { url });
+				});
+			};
 
 			const checkForNavigation = () => {
 				if (globalThis.location.href !== currentUrl) {
@@ -193,35 +282,56 @@ export default defineContentScript({
 						pathname: globalThis.location.pathname,
 						hash: globalThis.location.hash
 					});
-					void handleUrl(currentUrl);
+					navigate(currentUrl);
 				}
 			};
 
-			globalThis.addEventListener('popstate', () => {
+			const handlePopstate = () => {
 				logger.debug('Popstate event detected');
 				checkForNavigation();
-			});
+			};
 
-			globalThis.addEventListener('hashchange', () => {
+			const handleHashchange = () => {
 				logger.debug('Hash change detected', { hash: globalThis.location.hash });
 				checkForNavigation();
-			});
+			};
 
-			if (get(extensionFeaturesEnabled)) {
-				await handleUrl(currentUrl);
-			} else {
-				const unsubscribe = extensionFeaturesEnabled.subscribe((enabled) => {
-					if (enabled) {
-						currentUrl = globalThis.location.href;
-						void handleUrl(currentUrl);
-						unsubscribe();
-					}
-				});
+			const installNavigationListeners = (): void => {
+				if (listenersInstalled) return;
+				listenersInstalled = true;
+				globalThis.addEventListener('popstate', handlePopstate);
+				globalThis.addEventListener('hashchange', handleHashchange);
+			};
+
+			const removeNavigationListeners = (): void => {
+				if (!listenersInstalled) return;
+				listenersInstalled = false;
+				globalThis.removeEventListener('popstate', handlePopstate);
+				globalThis.removeEventListener('hashchange', handleHashchange);
+			};
+
+			// The gate can open (API key accepted) and close (key removed or legal
+			// paused) during a session. Navigation listeners exist only while open.
+			const unsubscribeGate = extensionFeaturesEnabled.subscribe((enabled) => {
+				if (enabled) {
+					installNavigationListeners();
+					currentUrl = globalThis.location.href;
+					navigate(currentUrl);
+					return;
+				}
+
+				removeNavigationListeners();
+				navigationToken++;
+				deactivateVisuals();
+				void pageManager?.deactivate();
 				logger.debug('Waiting for onboarding + legal acceptance to initialize page controllers');
-			}
+			});
 
 			window.addEventListener('beforeunload', () => {
 				logger.debug('Content script cleanup on page unload');
+				removeNavigationListeners();
+				unsubscribeGate();
+				deactivateVisuals();
 				metricsCollector.stop();
 				themeManager.cleanup();
 			});

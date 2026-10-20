@@ -1,7 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import { apiClient } from '../services/rotector/api-client';
-// Shared PASC access-level type (relocated from the mock module at cutover).
-import { PASC_ACCESS_RANK, type PascAccessLevel } from '../data/pasc-mock';
+import { PASC_ACCESS_RANK, type PascAccessLevel } from '../data/pasc';
 import { logger } from '../utils/logging/logger';
 
 interface PascClearanceState {
@@ -42,11 +41,13 @@ export function ensurePascClearance(): Promise<PascAccessLevel | null> {
 
 export const pascClearance = derived(clearanceState, ($state) => $state.level);
 
-// Assume full visibility until clearance is known: lookup details are already
-// filtered server-side, so the client filter can only under-show while loading.
+// Until clearance resolves (or if it fails), treat the viewer as the lowest
+// clearance. A full-visibility fallback would make every client-side PASC
+// detail gate fail open; showing less until the server answers is the only
+// safe default.
 export const pascViewerLevel = derived(
 	clearanceState,
-	($state): PascAccessLevel => $state.level ?? 'M2'
+	($state): PascAccessLevel => $state.level ?? '0'
 );
 
 export const pascCanEdit = derived(

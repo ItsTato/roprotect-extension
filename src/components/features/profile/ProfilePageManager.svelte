@@ -261,7 +261,10 @@
 					skipAutoFetch: true,
 					suppressMembershipBadge: true,
 					onClick: handleStatusClick,
-					onQueue: handleQueueUser
+					onQueue: handleQueueUser,
+					// A PASC save/refresh changes the authoritative verdict; refetch so
+					// the profile warning and blur state follow it.
+					onStatusUpdate: () => querySubscription.refresh()
 				}
 			});
 		} catch (error) {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { get } from 'svelte/store';
+	import { _ } from 'svelte-i18n';
 	import { EditorView } from '@codemirror/view';
 	import { markdown } from '@codemirror/lang-markdown';
 	import { oneDark } from '@codemirror/theme-one-dark';
@@ -8,11 +9,11 @@
 	import { themeManager } from '@/lib/utils/theme';
 	import { logger } from '@/lib/utils/logging/logger';
 
-	// MOCK ONLY — CodeMirror markdown editor with live preview for the PASC
-	// internal review field (see T:\Python Projects\TLET\PASC\PASC.md). Synchronous init, no workers, no
-	// lazy module loading: everything CodeMirror needs is in the bundle, which
-	// is what Monaco could not survive here. Preview HTML is DOMPurify-sanitized
-	// because reviewer-authored markdown renders for lower-clearance viewers.
+	// CodeMirror markdown editor with live preview for the PASC internal review
+	// field. Synchronous init, no workers, no lazy module loading: everything
+	// CodeMirror needs is in the bundle, which is what Monaco could not survive
+	// here. Preview HTML is DOMPurify-sanitized because reviewer-authored
+	// markdown renders for lower-clearance viewers.
 
 	interface Props {
 		value?: string;
@@ -26,7 +27,17 @@
 	let view = $state<EditorView | null>(null);
 	let previewHtml = $state('');
 	let loadError = $state(false);
-	let loadErrorText = $state('');
+
+	// Guards the async markdown render so a slower earlier value cannot
+	// overwrite the preview for the latest keystroke.
+	let renderToken = 0;
+
+	function updatePreview(next: string): void {
+		const token = ++renderToken;
+		void renderMarkdown(next).then((html) => {
+			if (token === renderToken) previewHtml = html;
+		});
+	}
 
 	onMount(() => {
 		if (!editorHost) return;
@@ -53,24 +64,20 @@
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) {
 							value = update.state.doc.toString();
-							void renderMarkdown(value).then((html) => {
-								previewHtml = html;
-							});
+							updatePreview(value);
 						}
 					})
 				],
 				parent: editorHost
 			});
-			void renderMarkdown(initial).then((html) => {
-				previewHtml = html;
-			});
+			updatePreview(initial);
 		} catch (error) {
 			loadError = true;
-			loadErrorText = error instanceof Error ? error.message : String(error);
-			logger.error('[PASC mock] CodeMirror failed to initialize:', error);
+			logger.error('[PASC] CodeMirror failed to initialize:', error);
 		}
 
 		return () => {
+			renderToken++;
 			view?.destroy();
 			view = null;
 		};
@@ -80,12 +87,11 @@
 <div class="pasc-editor-layout">
 	<div bind:this={editorHost} class="pasc-editor-pane">
 		{#if loadError}
-			<p class="pasc-meta">
-				Editor failed to load{loadErrorText ? `: ${loadErrorText}` : ''} — type below, preview still updates.
-			</p>
+			<p class="pasc-meta">{$_('pasc_editor_load_failed')}</p>
 			<textarea
 				class="pasc-textarea"
-				placeholder="Markdown — preview updates live"
+				oninput={(event) => updatePreview(event.currentTarget.value)}
+				placeholder={$_('pasc_editor_placeholder')}
 				rows="8"
 				bind:value
 			></textarea>

@@ -174,7 +174,7 @@ function createSystemApisFromWhoami(whoami: WhoamiData, apiKey: string): CustomA
 			enabled: true,
 			// SCSN and TASE are slow; give them a longer timeout. Other system
 			// providers use the default.
-			timeout: id === 'scsn' || id === 'tase' ? 120_000 : API_CONFIG.TIMEOUT,
+			timeout: id === 'scsn' || id === 'tase' ? 60_000 : API_CONFIG.TIMEOUT,
 			order: index,
 			createdAt: 0,
 			isSystem: true,

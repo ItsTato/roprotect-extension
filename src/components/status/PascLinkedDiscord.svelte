@@ -1,13 +1,14 @@
 <script lang="ts">
 	import SiDiscord from '@icons-pack/svelte-simple-icons/icons/SiDiscord';
 	import { ChevronDown, Flag, Server, Users } from '@lucide/svelte';
+	import { _ } from 'svelte-i18n';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import {
 		PASC_FLAG_COLORS,
 		PASC_FLAG_LABELS,
 		type PascAccessLevel,
 		type PascDiscordAccount
-	} from '@/lib/data/pasc-mock';
+	} from '@/lib/data/pasc';
 
 	// Compact RoWifi account block for the PASC tab. The full TASE display
 	// carries score/date metadata that PASC does not receive; this keeps the
@@ -76,7 +77,7 @@
 
 	<span class="pasc-discord-side">
 		<span class="pasc-discord-server-count">
-			{account.serverCount} server{account.serverCount === 1 ? '' : 's'}
+			{$_('pasc_discord_server_count', { values: { 0: String(account.serverCount) } })}
 		</span>
 		{#if account.servers.length > 0}
 			<ChevronDown class="pasc-discord-chevron" size={13} />
@@ -89,31 +90,48 @@
 		{#if accessLevel}
 			<span
 				class="pasc-access-chip"
-				title={`Case details are visible to ${accessLevel} (you are ${viewerLevel})`}
+				title={$_('pasc_discord_access_title', {
+					values: { 0: accessLevel, 1: viewerLevel }
+				})}
 			>
 				{accessLevel}
 			</span>
 		{/if}
 		<h4 class="pasc-discord-title">
 			<SiDiscord size={13} />
-			Linked Discord
+			{$_('pasc_discord_linked')}
 		</h4>
 		<div
 			class="pasc-discord-summary"
-			aria-label={`${String(accounts.length)} linked accounts, ${String(totalServers)} servers${
-				flaggedServers > 0 ? `, ${String(flaggedServers)} flagged` : ''
-			}`}
+			aria-label={flaggedServers > 0
+				? $_('pasc_discord_summary_aria_flagged', {
+						values: {
+							0: String(accounts.length),
+							1: String(totalServers),
+							2: String(flaggedServers)
+						}
+					})
+				: $_('pasc_discord_summary_aria', {
+						values: {
+							0: String(accounts.length),
+							1: String(totalServers)
+						}
+					})}
 		>
 			<span
 				class="pasc-discord-summary-item"
-				title={`${String(accounts.length)} linked account${accounts.length === 1 ? '' : 's'}`}
+				title={$_('pasc_discord_accounts_title', {
+					values: { 0: String(accounts.length) }
+				})}
 			>
 				<Users size={11} />
 				{accounts.length}
 			</span>
 			<span
 				class="pasc-discord-summary-item"
-				title={`${String(totalServers)} detected server${totalServers === 1 ? '' : 's'}`}
+				title={$_('pasc_discord_servers_title', {
+					values: { 0: String(totalServers) }
+				})}
 			>
 				<Server size={11} />
 				{totalServers}
@@ -121,7 +139,9 @@
 			{#if flaggedServers > 0}
 				<span
 					class="pasc-discord-summary-item pasc-discord-flagged"
-					title={`${String(flaggedServers)} flagged server${flaggedServers === 1 ? '' : 's'}`}
+					title={$_('pasc_discord_flagged_servers_title', {
+						values: { 0: String(flaggedServers) }
+					})}
 				>
 					<Flag size={11} />
 					{flaggedServers}
@@ -166,7 +186,7 @@
 									style:color={PASC_FLAG_COLORS[server.flagType]}
 									class="pasc-discord-server-flag"
 								>
-									{PASC_FLAG_LABELS[server.flagType]}
+									{$_(PASC_FLAG_LABELS[server.flagType])}
 								</span>
 							</li>
 						{/each}

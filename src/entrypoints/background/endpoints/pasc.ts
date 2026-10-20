@@ -1,9 +1,7 @@
 import * as v from 'valibot';
-import { API_CONFIG } from '@/lib/types/constants';
-// PascAccessLevel lives with the shared PASC flag maps until the mock cutover
-// relocates them (see PASC.md §8 step 6).
+import { API_CONFIG, PASC_FILE_LIMITS } from '@/lib/types/constants';
 import type { PascFileDescriptor, PascRecordUpsert, UserStatus } from '@/lib/types/api';
-import type { PascAccessLevel } from '@/lib/data/pasc-mock';
+import type { PascAccessLevel } from '@/lib/data/pasc';
 import { SETTINGS_KEYS } from '@/lib/types/settings';
 import { getStorage } from '@/lib/utils/storage';
 import { validateEntityId } from '@/lib/utils/dom/sanitizer';
@@ -18,6 +16,41 @@ const PascFileDescriptorSchema = v.object({
 	size: v.nullish(v.number()),
 	access: v.nullish(v.string())
 });
+
+function pascFileHeaders(apiKey: string, clientId?: string): Headers {
+	const headers = new Headers({ 'X-Auth-Token': apiKey });
+	if (clientId) headers.set('X-Client-ID', clientId);
+	return headers;
+}
+
+// Raw file fetches cannot use makeHttpRequest (multipart/binary bodies), so
+// they carry their own explicit timeout and client id. A hung upload/download
+// must fail instead of leaving the modal stuck on "Uploading...".
+async function fetchPascFile(
+	url: string,
+	apiKey: string,
+	init: RequestInit,
+	clientId?: string
+): Promise<Response> {
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), PASC_FILE_LIMITS.TIMEOUT);
+	try {
+		return await fetch(url, {
+			...init,
+			headers: pascFileHeaders(apiKey, clientId),
+			signal: controller.signal
+		});
+	} catch (error) {
+		if (controller.signal.aborted) {
+			throw new Error(`PASC file request timed out after ${String(PASC_FILE_LIMITS.TIMEOUT)}ms`, {
+				cause: error
+			});
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
 
 // Viewer's PASC access level, resolved server-side from identity. Proxied: the
 // extension calls RoProtect only, never the PASC service directly.
@@ -86,9 +119,18 @@ export async function uploadPascFile(
 	filename: string,
 	bytesBase64: string,
 	contentType: string | undefined,
-	access: string | undefined
+	access: string | undefined,
+	clientId?: string
 ): Promise<PascFileDescriptor> {
 	const sanitizedUserId = validateEntityId(userId);
+	if (bytesBase64.length > PASC_FILE_LIMITS.MAX_BASE64_LENGTH) {
+		throw new Error(
+			`PASC file upload rejected: file exceeds ${String(PASC_FILE_LIMITS.MAX_BYTES / (1024 * 1024))} MB`
+		);
+	}
+	if (contentType !== undefined && contentType.length > PASC_FILE_LIMITS.MAX_CONTENT_TYPE_LENGTH) {
+		throw new Error('PASC file upload rejected: invalid content type');
+	}
 	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
 	const apiKey = storedApiKey.trim();
 	if (!apiKey) throw new Error('No API key configured');
@@ -109,9 +151,11 @@ export async function uploadPascFile(
 
 	// Raw fetch (not makeHttpRequest): multipart needs the browser-generated
 	// boundary content type, which the JSON-oriented client would overwrite.
-	const response = await fetch(
+	const response = await fetchPascFile(
 		`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PASC_RECORD}/${sanitizedUserId}/files`,
-		{ method: 'POST', headers: { 'X-Auth-Token': apiKey }, body: form }
+		apiKey,
+		{ method: 'POST', body: form },
+		clientId
 	);
 	const payload = (await response.json()) as {
 		success?: boolean;
@@ -144,16 +188,19 @@ export interface PascDownloadedFile {
 // stays out of content scripts. Bytes cross messaging as base64 (see upload).
 export async function downloadPascFile(
 	userId: string | number,
-	fileId: string
+	fileId: string,
+	clientId?: string
 ): Promise<PascDownloadedFile> {
 	const sanitizedUserId = validateEntityId(userId);
 	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
 	const apiKey = storedApiKey.trim();
 	if (!apiKey) throw new Error('No API key configured');
 
-	const response = await fetch(
+	const response = await fetchPascFile(
 		`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PASC_RECORD}/${sanitizedUserId}/files/${encodeURIComponent(fileId)}`,
-		{ method: 'GET', headers: { 'X-Auth-Token': apiKey } }
+		apiKey,
+		{ method: 'GET' },
+		clientId
 	);
 	if (!response.ok) {
 		let detail = `PASC file download failed (HTTP ${String(response.status)})`;
@@ -165,7 +212,18 @@ export async function downloadPascFile(
 		}
 		throw new Error(detail);
 	}
+	const declaredLength = Number(response.headers.get('Content-Length') ?? '0');
+	if (declaredLength > PASC_FILE_LIMITS.MAX_BYTES) {
+		throw new Error(
+			`PASC file download rejected: file exceeds ${String(PASC_FILE_LIMITS.MAX_BYTES / (1024 * 1024))} MB`
+		);
+	}
 	const buffer = await response.arrayBuffer();
+	if (buffer.byteLength > PASC_FILE_LIMITS.MAX_BYTES) {
+		throw new Error(
+			`PASC file download rejected: file exceeds ${String(PASC_FILE_LIMITS.MAX_BYTES / (1024 * 1024))} MB`
+		);
+	}
 	const view = new Uint8Array(buffer);
 	let binary = '';
 	for (let i = 0; i < view.length; i += 32_768) {
@@ -194,16 +252,19 @@ function filenameFromDisposition(disposition: string, fallback: string): string 
 // missing file or refusal so the caller can surface the message.
 export async function deletePascFile(
 	userId: string | number,
-	fileId: string
+	fileId: string,
+	clientId?: string
 ): Promise<{ deleted: string }> {
 	const sanitizedUserId = validateEntityId(userId);
 	const storedApiKey = await getStorage<string>('sync', SETTINGS_KEYS.API_KEY, '');
 	const apiKey = storedApiKey.trim();
 	if (!apiKey) throw new Error('No API key configured');
 
-	const response = await fetch(
+	const response = await fetchPascFile(
 		`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PASC_RECORD}/${sanitizedUserId}/files/${encodeURIComponent(fileId)}`,
-		{ method: 'DELETE', headers: { 'X-Auth-Token': apiKey } }
+		apiKey,
+		{ method: 'DELETE' },
+		clientId
 	);
 	const payload = (await response.json()) as {
 		success?: boolean;

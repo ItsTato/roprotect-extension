@@ -39,7 +39,11 @@
 		resetElementBlur,
 		revealUserElement
 	} from '@/lib/services/blur/service';
-	import { isFlagged, createErrorCombinedStatus } from '@/lib/utils/status/status-utils';
+	import {
+		isFlagged,
+		createErrorCombinedStatus,
+		withUpdatedProviderData
+	} from '@/lib/utils/status/status-utils';
 	import { restrictedAccessStore } from '@/lib/stores/restricted-access';
 	import StatusIndicator from '../../status/StatusIndicator.svelte';
 	import type { QueueModalManagerInstance } from '../queue/queue-modal-manager';
@@ -575,6 +579,26 @@
 		}
 	}
 
+	// A PASC save/refresh replaces the authoritative verdict for this user, so the
+	// cached combined status, blur reveal, and flagged marker all follow it.
+	function handlePascStatusUpdate(userId: string, status: UserStatus): void {
+		const current = userStatuses.get(userId);
+		if (!current) return;
+		const next = withUpdatedProviderData(current, 'system-pasc', status);
+		userStatuses.set(userId, next);
+
+		const element = document.querySelector(
+			`[${CSS.escape(STATUS_SELECTORS.DATA_USER_ID)}="${CSS.escape(userId)}"]`
+		);
+		if (!element) return;
+		revealUserElement(element, next);
+		if (isFlagged(next)) {
+			element.setAttribute(STATUS_SELECTORS.DATA_FLAGGED, 'true');
+		} else {
+			element.removeAttribute(STATUS_SELECTORS.DATA_FLAGGED);
+		}
+	}
+
 	// Resolves the per-page-type target selector and mounts the indicator, promoting the target to relative positioning when needed
 	function mountStatusIndicator(user: UserDetails, isLoading = false) {
 		const endTrace = startTrace(TRACE_CATEGORIES.COMPONENT, 'mountStatusIndicator', {
@@ -662,7 +686,8 @@
 					showText,
 					skipAutoFetch: true,
 					onClick: handleStatusClick,
-					onQueue: handleQueueUser
+					onQueue: handleQueueUser,
+					onStatusUpdate: (status: UserStatus) => handlePascStatusUpdate(user.userId, status)
 				}
 			});
 

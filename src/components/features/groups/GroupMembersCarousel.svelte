@@ -22,6 +22,7 @@
 	} from '@/lib/types/constants';
 	import { GROUP_MEMBERS_CAROUSEL_SELECTORS } from '@/lib/controllers/selectors/groups';
 	import { markUserElementForBlur, revealUserElement } from '@/lib/services/blur/service';
+	import { isFlagged, withUpdatedProviderData } from '@/lib/utils/status/status-utils';
 	import { asApiError } from '@/lib/utils/api/api-error';
 	import { createAbortableBatch, type AbortableBatch } from '@/lib/utils/api/abortable-batch';
 	import { logger } from '@/lib/utils/logging/logger';
@@ -461,6 +462,21 @@
 	}
 
 	function mountStatusIndicator(tileElement: HTMLElement, userId: string) {
+		// A PASC save/refresh replaces the authoritative verdict; keep the cached
+		// combined status, blur reveal, and flagged marker in sync.
+		const handleStatusUpdate = (status: UserStatus): void => {
+			const current = userStatuses.get(userId);
+			if (!current) return;
+			const next = withUpdatedProviderData(current, 'system-pasc', status);
+			userStatuses.set(userId, next);
+			revealUserElement(tileElement, next);
+			if (isFlagged(next)) {
+				tileElement.setAttribute(STATUS_SELECTORS.DATA_FLAGGED, 'true');
+			} else {
+				tileElement.removeAttribute(STATUS_SELECTORS.DATA_FLAGGED);
+			}
+		};
+
 		// Find or create status container
 		let container = tileElement.querySelector<HTMLElement>(
 			`.${COMPONENT_CLASSES.STATUS_CONTAINER}`
@@ -483,6 +499,7 @@
 				showText: false,
 				skipAutoFetch: true,
 				onQueue: handleQueueUser,
+				onStatusUpdate: handleStatusUpdate,
 				get userUsername() {
 					const member = memberById.get(userId);
 					const trackedUser = trackedUserById.get(userId);

@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { Download, Pencil, Trash2 } from '@lucide/svelte';
+	import { _ } from 'svelte-i18n';
 	import { getAssetUrl } from '@/lib/utils/assets';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import type { StatusIconName } from '@/lib/utils/icon-mapping';
 	import PascLinkedDiscord from './PascLinkedDiscord.svelte';
 	import PascReviewModal from './PascReviewModal.svelte';
+	import OverlayPortal from '@/components/overlay/OverlayPortal.svelte';
 	import { apiClient } from '@/lib/services/rotector/api-client';
 	import { renderMarkdown } from '@/lib/utils/markdown';
 	import {
@@ -18,11 +20,10 @@
 		type PascProviderVerdict,
 		type PascRecord,
 		type PascReferral
-	} from '@/lib/data/pasc-mock';
+	} from '@/lib/data/pasc';
 
-	// PASC provider tab. Renders real lookup data via mapPascUserStatus, and the
-	// mock harness feeds it mock records — same component, both worlds. A null record
-	// means the user has no PASC case file: the verdict is referred to the
+	// PASC provider tab. Renders real lookup data via mapPascUserStatus. A null
+	// record means the user has no PASC case file: the verdict is referred to the
 	// highest relied-upon provider verdict instead (no override).
 
 	interface Props {
@@ -38,7 +39,7 @@
 		onEdit?: () => void;
 		onRefresh?: (() => void) | undefined;
 		// Moderator review requests (Report / Ask for Recheck). The caller owns
-		// the user id and the live-only gate: mock previews never send.
+		// the user id and the live-only gate.
 		userId: string;
 		requestsEnabled?: boolean;
 		displayName?: string | undefined;
@@ -72,7 +73,8 @@
 		past_offender: 'past-offender',
 		provisional: 'provisional',
 		safe: 'safe',
-		redacted: 'redacted'
+		redacted: 'redacted',
+		unknown: 'unknown'
 	};
 
 	const visible = $derived(
@@ -132,14 +134,27 @@
 	);
 
 	$effect(() => {
-		// Reset per-user so a sent state never carries to the next tooltip.
+		// Reset every user-scoped field so state never carries between tooltips.
 		void userId;
 		reviewModal = null;
 		reviewDone = null;
 		publicNoteHtml = '';
 		internalReviewHtml = '';
-		if (!record) return;
+		selectedFileId = null;
+		fileActionError = null;
+		deletingFile = false;
 		confirmingDeleteId = null;
+		fileError = null;
+		fileLoading = false;
+		filePreviewHtml = '';
+		fileObjectUrl = null;
+		fileContentType = '';
+		if (lastObjectUrl) {
+			URL.revokeObjectURL(lastObjectUrl);
+			lastObjectUrl = null;
+		}
+		if (!record) return;
+
 		// Both reviewer fields render as markdown; each resolves independently.
 		const token = ++noteRenderToken;
 		void renderMarkdown(record.publicNote).then((html) => {
@@ -152,8 +167,7 @@
 
 	// Downloads the selected file through the background (auth headers stay
 	// out of content scripts). Images render inline, markdown/text renders
-	// sanitized, anything else becomes a download link. Mock previews render
-	// without any fetch; files without an upstream id cannot be fetched.
+	// sanitized, anything else becomes a download link.
 	$effect(() => {
 		const file = selectedFile;
 		if (lastObjectUrl) {
@@ -165,13 +179,6 @@
 		fileContentType = '';
 		fileError = null;
 		fileLoading = false;
-		const preview = file?.mockPreview;
-		if (preview) {
-			void renderMarkdown(preview).then((html) => {
-				filePreviewHtml = html;
-			});
-			return;
-		}
 		if (!file?.fileId || !record) return;
 		const fileId = file.fileId;
 		const userId = record.userId;
@@ -213,6 +220,16 @@
 		};
 	});
 
+	// Revoke the final blob URL when the tooltip unmounts.
+	$effect(() => {
+		return () => {
+			if (lastObjectUrl) {
+				URL.revokeObjectURL(lastObjectUrl);
+				lastObjectUrl = null;
+			}
+		};
+	});
+
 	// M1+ file delete with two-click confirm. The tab refreshes from the
 	// lookup afterwards so the row disappears without a stale re-render.
 	async function deleteFile(file: PascCaseFile) {
@@ -243,8 +260,8 @@
 	): { provider: string; flag: string; detail: string }[] {
 		return verdicts.map((verdict) => ({
 			provider: verdict.provider,
-			flag: PASC_FLAG_LABELS[verdict.flag],
-			detail: verdict.detail
+			flag: $_(PASC_FLAG_LABELS[verdict.flag]),
+			detail: $_(verdict.detail)
 		}));
 	}
 
@@ -263,11 +280,16 @@
 	} {
 		if (kind === 'recheck' && record) {
 			return {
-				targetLabel: `${record.displayName} — PASC flag: ${PASC_FLAG_LABELS[record.flag]}`,
+				targetLabel: $_('pasc_review_target_flag', {
+					values: {
+						0: record.displayName,
+						1: $_(PASC_FLAG_LABELS[record.flag])
+					}
+				}),
 				context: {
 					displayName: record.displayName,
 					username: record.username,
-					flag: PASC_FLAG_LABELS[record.flag],
+					flag: $_(PASC_FLAG_LABELS[record.flag]),
 					referralProvider: '',
 					referralFlag: '',
 					verdicts: reviewVerdicts(record.providerVerdicts)
@@ -276,16 +298,23 @@
 		}
 		const source = draftRecord;
 		const referralText = referral
-			? `Referred to ${referral.provider} (${PASC_FLAG_LABELS[referral.flag]})`
-			: 'No PASC case file';
+			? $_('pasc_review_referred', {
+					values: { 0: referral.provider, 1: $_(PASC_FLAG_LABELS[referral.flag]) }
+				})
+			: $_('pasc_review_no_record');
 		return {
-			targetLabel: `${source?.displayName ?? displayName ?? userId} — ${referralText}`,
+			targetLabel: $_('pasc_review_target_referral', {
+				values: {
+					0: source?.displayName ?? displayName ?? userId,
+					1: referralText
+				}
+			}),
 			context: {
 				displayName: source?.displayName ?? displayName ?? '',
 				username: source?.username ?? username ?? '',
 				flag: '',
 				referralProvider: referral?.provider ?? '',
-				referralFlag: referral ? PASC_FLAG_LABELS[referral.flag] : '',
+				referralFlag: referral ? $_(PASC_FLAG_LABELS[referral.flag]) : '',
 				verdicts: reviewVerdicts(source?.providerVerdicts ?? providerVerdicts ?? [])
 			}
 		};
@@ -304,7 +333,7 @@
 			{#if record.accessLevel}
 				<span class="pasc-access-chip">{record.accessLevel}</span>
 			{:else}
-				<span class="pasc-access-chip">Restricted</span>
+				<span class="pasc-access-chip">{$_('pasc_restricted')}</span>
 			{/if}
 			{#if canEdit}
 				<button
@@ -314,27 +343,28 @@
 					type="button"
 				>
 					<Pencil size={12} />
-					Edit record
+					{$_('pasc_edit_record')}
 				</button>
 			{/if}
 			{#if requestsEnabled && canRecheck}
 				<button
 					class="pasc-edit-button"
+					disabled={reviewDone === 'recheck'}
 					onclick={() => (reviewModal = 'recheck')}
-					title="Ask a PASC moderator to re-examine this case file"
+					title={$_('pasc_recheck_hint')}
 					type="button"
 				>
-					{reviewDone === 'recheck' ? 'Recheck requested' : 'Ask for Recheck'}
+					{reviewDone === 'recheck' ? $_('pasc_recheck_sent') : $_('pasc_recheck_action')}
 				</button>
 			{/if}
 		</div>
 
 		<!-- The PASC flag is public to every clearance (0+) and overrides the other
-		     providers — always rendered, never gated on `visible` (see T:\Python Projects\TLET\PASC\PASC.md). -->
+		     providers — always rendered, never gated on `visible`. -->
 		<div class="pasc-provider-row">
 			<StatusIcon name={FLAG_ICONS[record.flag]} color={PASC_FLAG_COLORS[record.flag]} size={14} />
-			<span class="pasc-provider-name">PASC verdict</span>
-			<span class="pasc-provider-detail">{PASC_FLAG_LABELS[record.flag]}</span>
+			<span class="pasc-provider-name">{$_('pasc_verdict')}</span>
+			<span class="pasc-provider-detail">{$_(PASC_FLAG_LABELS[record.flag])}</span>
 		</div>
 
 		{#if visible}
@@ -343,7 +373,7 @@
 				class:pasc-columns-single={discordAccounts.length === 0 || !canSeeDiscord}
 			>
 				<div>
-					<h4 class="pasc-column-title">Provider verdicts</h4>
+					<h4 class="pasc-column-title">{$_('pasc_provider_verdicts')}</h4>
 					<div class="pasc-container mt-2">
 						{#each providerRows as verdict (verdict.provider)}
 							<div class="pasc-provider-row">
@@ -353,21 +383,27 @@
 									size={14}
 								/>
 								<span class="pasc-provider-name">{verdict.provider}</span>
-								<span class="pasc-provider-detail">{verdict.detail}</span>
+								<span class="pasc-provider-detail">{$_(verdict.detail)}</span>
 							</div>
 						{/each}
 					</div>
 					<div style:margin-top="1rem" class="pasc-note">
 						<span class="pasc-note-label"
-							>PASC finding{#if record.accessLevel}
-								(public, {record.accessLevel}+){/if}</span
+							>{#if record.accessLevel}
+								{$_('pasc_finding_public', { values: { 0: record.accessLevel } })}
+							{:else}
+								{$_('pasc_finding')}
+							{/if}</span
 						>
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
 						<div class="pasc-markdown">{@html publicNoteHtml}</div>
 					</div>
 					{#if canSeeInternal}
 						<div style:margin-top="0.75rem" class="pasc-note">
-							<span class="pasc-note-label">Internal review ({record.internalReviewMinLevel}+)</span
+							<span class="pasc-note-label"
+								>{$_('pasc_internal_review_level', {
+									values: { 0: record.internalReviewMinLevel }
+								})}</span
 							>
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
 							<div class="pasc-markdown">{@html internalReviewHtml}</div>
@@ -375,7 +411,9 @@
 					{/if}
 					{#if visibleFiles.length > 0}
 						<div style:margin-top="0.75rem" class="pasc-note">
-							<span class="pasc-note-label">Case files ({visibleFiles.length})</span>
+							<span class="pasc-note-label"
+								>{$_('pasc_case_files_count', { values: { 0: visibleFiles.length } })}</span
+							>
 							{#each visibleFiles as file (file.id)}
 								<div class="pasc-file-row-wrap">
 									<button
@@ -396,17 +434,19 @@
 										<button
 											class="pasc-file-delete"
 											aria-label={confirmingDeleteId === file.id
-												? `Confirm delete ${file.name}`
-												: `Delete ${file.name}`}
+												? $_('pasc_file_confirm_delete_aria', { values: { 0: file.name } })
+												: $_('pasc_file_delete_aria', { values: { 0: file.name } })}
 											disabled={deletingFile}
 											onclick={() => void deleteFile(file)}
 											title={confirmingDeleteId === file.id
-												? 'Click again to confirm'
-												: 'Delete file'}
+												? $_('pasc_file_confirm_delete_title')
+												: $_('pasc_file_delete_title')}
 											type="button"
 										>
 											<Trash2 size={12} />
-											{confirmingDeleteId === file.id ? 'Sure?' : 'Delete'}
+											{confirmingDeleteId === file.id
+												? $_('pasc_file_sure')
+												: $_('pasc_file_delete')}
 										</button>
 									{/if}
 								</div>
@@ -417,11 +457,8 @@
 							{#if selectedFile}
 								<div class="pasc-file-viewer">
 									<span class="pasc-note-label">{selectedFile.name}</span>
-									{#if selectedFile.mockPreview}
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized via renderMarkdown -->
-										<div class="pasc-markdown">{@html filePreviewHtml}</div>
-									{:else if fileLoading}
-										<p class="pasc-meta">Loading file…</p>
+									{#if fileLoading}
+										<p class="pasc-meta">{$_('pasc_file_loading')}</p>
 									{:else if fileError}
 										<p class="pasc-meta">{fileError}</p>
 									{:else if filePreviewHtml}
@@ -431,15 +468,15 @@
 										<img class="pasc-file-image" alt={selectedFile.name} src={fileObjectUrl} />
 										<a class="pasc-file-download" download={selectedFile.name} href={fileObjectUrl}>
 											<Download size={12} />
-											Download
+											{$_('pasc_file_download')}
 										</a>
 									{:else if fileObjectUrl}
 										<a class="pasc-file-download" download={selectedFile.name} href={fileObjectUrl}>
 											<Download size={12} />
-											Download {selectedFile.name}
+											{$_('pasc_file_download_named', { values: { 0: selectedFile.name } })}
 										</a>
 									{:else}
-										<p class="pasc-meta">File download is not available in this build.</p>
+										<p class="pasc-meta">{$_('pasc_file_unavailable')}</p>
 									{/if}
 								</div>
 							{/if}
@@ -457,18 +494,23 @@
 			{#if record.reviewer || record.updatedAt}
 				<p class="pasc-footer">
 					{#if record.reviewer}
-						Reviewed by {record.reviewer}{record.updatedAt ? ` · ${record.updatedAt}` : ''}
+						{$_('pasc_reviewed_by', {
+							values: {
+								0: record.reviewer,
+								1: record.updatedAt
+							}
+						})}
 					{:else}
-						Updated {record.updatedAt}
+						{$_('pasc_updated', { values: { 0: record.updatedAt } })}
 					{/if}
 				</p>
 			{/if}
 		{:else}
 			<p class="pasc-footer">
 				{#if record.accessLevel}
-					Case details require {record.accessLevel} clearance — flag shown for all levels.
+					{$_('pasc_details_require', { values: { 0: record.accessLevel } })}
 				{:else}
-					Case details are restricted — flag shown for all levels.
+					{$_('pasc_details_restricted')}
 				{/if}
 			</p>
 		{/if}
@@ -477,7 +519,7 @@
 		     live provider context, plus the referral verdict above it. -->
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
-			<span class="pasc-access-chip">No record</span>
+			<span class="pasc-access-chip">{$_('pasc_no_record')}</span>
 			{#if canEdit}
 				<button
 					style:margin-inline-start="auto"
@@ -486,17 +528,18 @@
 					type="button"
 				>
 					<Pencil size={12} />
-					Create record
+					{$_('pasc_create_record')}
 				</button>
 			{/if}
 			{#if requestsEnabled}
 				<button
 					class="pasc-edit-button"
+					disabled={reviewDone === 'report'}
 					onclick={() => (reviewModal = 'report')}
-					title="Report this user to PASC moderators for review"
+					title={$_('pasc_report_hint')}
 					type="button"
 				>
-					{reviewDone === 'report' ? 'Report sent' : 'Report'}
+					{reviewDone === 'report' ? $_('pasc_report_sent') : $_('pasc_report_action')}
 				</button>
 			{/if}
 		</div>
@@ -507,8 +550,10 @@
 					color={PASC_FLAG_COLORS[referral.flag]}
 					size={14}
 				/>
-				<span class="pasc-provider-name">Referred to {referral.provider}</span>
-				<span class="pasc-provider-detail">{PASC_FLAG_LABELS[referral.flag]}</span>
+				<span class="pasc-provider-name"
+					>{$_('pasc_referred_to', { values: { 0: referral.provider } })}</span
+				>
+				<span class="pasc-provider-detail">{$_(PASC_FLAG_LABELS[referral.flag])}</span>
 			</div>
 		{/if}
 		<div
@@ -516,7 +561,7 @@
 			class:pasc-columns-single={discordAccounts.length === 0 || !canSeeDiscord}
 		>
 			<div>
-				<h4 class="pasc-column-title">Provider verdicts</h4>
+				<h4 class="pasc-column-title">{$_('pasc_provider_verdicts')}</h4>
 				<div class="pasc-container mt-2">
 					{#each providerRows as verdict (verdict.provider)}
 						<div class="pasc-provider-row">
@@ -526,7 +571,7 @@
 								size={14}
 							/>
 							<span class="pasc-provider-name">{verdict.provider}</span>
-							<span class="pasc-provider-detail">{verdict.detail}</span>
+							<span class="pasc-provider-detail">{$_(verdict.detail)}</span>
 						</div>
 					{/each}
 				</div>
@@ -535,22 +580,23 @@
 				<PascLinkedDiscord accessLevel={null} accounts={discordAccounts} {viewerLevel} />
 			{/if}
 		</div>
-		<p class="pasc-footer">No PASC case file for this user — create one to start a human review.</p>
+		<p class="pasc-footer">{$_('pasc_no_record_create')}</p>
 	{:else}
 		<!-- No PASC case file: the verdict is referred to the highest relied-upon
 		     provider verdict. No override, no edit (nothing to edit). -->
 		<div class="pasc-header">
 			<img class="pasc-header-logo" alt="PASC" src={pascLogo} />
-			<span class="pasc-access-chip">No record</span>
+			<span class="pasc-access-chip">{$_('pasc_no_record')}</span>
 			{#if requestsEnabled}
 				<button
 					style:margin-inline-start="auto"
 					class="pasc-edit-button"
+					disabled={reviewDone === 'report'}
 					onclick={() => (reviewModal = 'report')}
-					title="Report this user to PASC moderators for review"
+					title={$_('pasc_report_hint')}
 					type="button"
 				>
-					{reviewDone === 'report' ? 'Report sent' : 'Report'}
+					{reviewDone === 'report' ? $_('pasc_report_sent') : $_('pasc_report_action')}
 				</button>
 			{/if}
 		</div>
@@ -561,37 +607,35 @@
 					color={PASC_FLAG_COLORS[referral.flag]}
 					size={14}
 				/>
-				<span class="pasc-provider-name">Referred to {referral.provider}</span>
-				<span class="pasc-provider-detail">{PASC_FLAG_LABELS[referral.flag]}</span>
+				<span class="pasc-provider-name"
+					>{$_('pasc_referred_to', { values: { 0: referral.provider } })}</span
+				>
+				<span class="pasc-provider-detail">{$_(PASC_FLAG_LABELS[referral.flag])}</span>
 			</div>
-			<p class="pasc-footer">
-				No PASC case file for this user — verdict deferred to the highest relied-upon provider.
-			</p>
+			<p class="pasc-footer">{$_('pasc_no_record_referral')}</p>
 		{:else}
-			<p class="pasc-footer">No PASC case file for this user.</p>
+			<p class="pasc-footer">{$_('pasc_no_record_only')}</p>
 		{/if}
 	{/if}
 	{#if reviewModal}
 		{@const review = buildReviewContext(reviewModal)}
-		<div
-			class="modal-overlay visible"
-			aria-label={reviewModal === 'report' ? 'Report user' : 'Ask for Recheck'}
-			aria-modal="true"
-			onclick={(event) => event.stopPropagation()}
-			onkeydown={(event) => {
-				if (event.key === 'Escape') reviewModal = null;
-			}}
-			role="dialog"
-			tabindex="-1"
-		>
-			<PascReviewModal
-				context={review.context}
-				kind={reviewModal}
-				onClose={() => (reviewModal = null)}
-				onSent={handleReviewSent}
-				targetLabel={review.targetLabel}
-				{userId}
-			/>
-		</div>
+		<!-- Portal out of .pasc-container: container-type makes it the containing
+		     block for fixed descendants, which would trap the overlay in the panel. -->
+		<OverlayPortal>
+			<div
+				class="modal-overlay visible"
+				onclick={(event) => event.stopPropagation()}
+				role="presentation"
+			>
+				<PascReviewModal
+					context={review.context}
+					kind={reviewModal}
+					onClose={() => (reviewModal = null)}
+					onSent={handleReviewSent}
+					targetLabel={review.targetLabel}
+					{userId}
+				/>
+			</div>
+		</OverlayPortal>
 	{/if}
 </div>
