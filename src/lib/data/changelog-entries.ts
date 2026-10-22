@@ -2,6 +2,40 @@ import type { Changelog } from '@/lib/types/changelog';
 
 export const CHANGELOGS: Changelog[] = [
 	{
+		id: 'v2.23.0',
+		version: '2.23.0',
+		date: '2026-10-21',
+		title: 'PASC case files, review requests, and Discord sign-in',
+		summary:
+			'PASC case files can now be previewed, downloaded and deleted right in the tab, and reports or recheck requests reach the moderators with an optional note. Discord sign-in joins API-key setup, and the public finding renders as markdown.',
+		changes: [
+			{
+				type: 'added',
+				description: 'Discord sign-in for API key setup and membership linking'
+			},
+			{
+				type: 'added',
+				description: 'PASC case-file previews, downloads and M1+ deletion'
+			},
+			{
+				type: 'added',
+				description: 'Report and Ask for Recheck buttons with an optional note for moderators'
+			},
+			{
+				type: 'changed',
+				description: 'PASC finding renders as markdown and notes show in full'
+			},
+			{
+				type: 'changed',
+				description: 'PASC tab uses the full width when no linked Discord accounts are visible'
+			},
+			{
+				type: 'fixed',
+				description: 'PASC case-file uploads no longer fail during extension messaging'
+			}
+		]
+	},
+	{
 		id: 'v2.22.0',
 		version: '2.22.0',
 		date: '2026-10-14',
