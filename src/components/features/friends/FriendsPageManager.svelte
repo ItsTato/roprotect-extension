@@ -6,7 +6,7 @@
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
 	import { getFriendsListTab, normalizePathname } from '@/lib/utils/dom/page-detection';
 	import { extractIdFromUrl } from '@/lib/utils/dom/sanitizer';
-	import { resetFriendsScan, selectedFriendsCategory } from '@/lib/stores/friends-scan';
+	import { selectedFriendsCategory } from '@/lib/stores/friends-scan';
 	import UserListManager from '../lists/UserListManager.svelte';
 	import FriendsScanPanel from './FriendsScanPanel.svelte';
 	import FriendsTagFilters from './FriendsTagFilters.svelte';
@@ -251,7 +251,6 @@
 			syntheticChipRow = null;
 		}
 		clearFilteredView();
-		resetFriendsScan();
 	}
 
 	function cleanup() {

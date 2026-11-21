@@ -49,7 +49,7 @@
 	import type { QueueModalManagerInstance } from '../queue/queue-modal-manager';
 	import UserListManager from '../lists/UserListManager.svelte';
 	import GroupListManager from '../groups/GroupListManager.svelte';
-	import FriendsScanBar from '../friends/FriendsScanBar.svelte';
+	import FriendsScanPanel from '../friends/FriendsScanPanel.svelte';
 	import GroupsScanBar from '../groups/GroupsScanBar.svelte';
 	import CipherIndicator from '../cipher/CipherIndicator.svelte';
 
@@ -86,7 +86,7 @@
 	let blurObserverCleanup: (() => void) | null = null;
 	let nameObserverCleanup: (() => void) | null = null;
 	let cipherContainer: HTMLElement | null = null;
-	let friendsScanBarCleanup: (() => void) | null = null;
+	let friendsScanPanelCleanup: (() => void) | null = null;
 	let groupsScanBarCleanup: (() => void) | null = null;
 	// Async setup continues across `await` points; once the controller tears the
 	// manager down, a late continuation must not mount components into a detached tree.
@@ -146,7 +146,7 @@
 		setupFriendWarning();
 
 		await Promise.all([
-			setupCarousel().then(setupFriendsScanBar),
+			setupCarousel().then(setupFriendsScanPanel),
 			setupGroupsShowcase().then(setupGroupsScanBar),
 			setupCipherIndicator()
 		]);
@@ -434,7 +434,7 @@
 		}
 	}
 
-	async function setupFriendsScanBar() {
+	async function setupFriendsScanPanel() {
 		if (!showCarousel) return;
 		if (!get(settings)[SETTINGS_KEYS.FRIENDS_CHECK_ENABLED]) return;
 		const isOwnProfile = userId === getLoggedInUserId();
@@ -448,20 +448,20 @@
 			if (!heading) return;
 
 			const container = document.createElement('span');
-			container.className = COMPONENT_CLASSES.SCAN_HOST;
+			container.className = COMPONENT_CLASSES.PROFILE_FRIENDS_SCAN_HOST;
 			heading.after(container);
 
-			const component = mount(FriendsScanBar, {
+			const component = mount(FriendsScanPanel, {
 				target: container,
 				props: { userId, isOwnFriends: userId === getLoggedInUserId() }
 			});
 
-			friendsScanBarCleanup = () => {
+			friendsScanPanelCleanup = () => {
 				void unmount(component);
 				container.remove();
 			};
 		} catch (error) {
-			logger.error('Failed to setup friends scan bar:', error);
+			logger.error('Failed to setup friends scan panel:', error);
 		}
 	}
 
@@ -669,8 +669,8 @@
 		if (cipherComponent) void unmount(cipherComponent);
 		unmountMembershipPill();
 
-		friendsScanBarCleanup?.();
-		friendsScanBarCleanup = null;
+		friendsScanPanelCleanup?.();
+		friendsScanPanelCleanup = null;
 		groupsScanBarCleanup?.();
 		groupsScanBarCleanup = null;
 

@@ -3,6 +3,7 @@ import { clearDiscordDataCache } from '../../services/third-party/discord-data';
 import { clearQuarryCache } from '../../services/third-party/quarry';
 import { resetPascClearance } from '../../stores/pasc-clearance';
 import { resetFriendsScan } from '../../stores/friends-scan';
+import { stopFriendsScan } from '../../services/rotector/friends-scan-manager';
 
 // Everything cached here is scoped to the viewer's API key (PASC clearance and
 // case details, Discord links, provider verdicts). When the key changes in the
@@ -14,5 +15,6 @@ export function clearViewerScopedCaches(): void {
 	clearDiscordDataCache();
 	clearQuarryCache();
 	resetPascClearance();
+	stopFriendsScan();
 	resetFriendsScan();
 }

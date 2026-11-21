@@ -1,33 +1,23 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { Tween } from 'svelte/motion';
 	import { cubicOut } from 'svelte/easing';
 	import { _ } from 'svelte-i18n';
 	import { LoaderCircle, TriangleAlert } from '@lucide/svelte';
-	import { createAbortableBatch } from '@/lib/utils/api/abortable-batch';
-	import { logger } from '@/lib/utils/logging/logger';
 	import StatusIcon from '@/components/icons/StatusIcon.svelte';
 	import OverlayPortal from '@/components/overlay/OverlayPortal.svelte';
 	import ScanShield from './ScanShield.svelte';
 	import {
-		scanFriendsForUser,
-		type ScanCategory,
-		type ScanCounts,
-		type ScanProgressDetail
-	} from '@/lib/services/rotector/scan-jobs';
+		friendsScanState,
+		joinFriendsScan,
+		restartFriendsScan
+	} from '@/lib/services/rotector/friends-scan-manager';
 	import {
 		SCAN_CATEGORY_PRESENTATION,
 		SCAN_SEVERITY_ORDER
 	} from '@/lib/utils/status/scan-category';
-	import {
-		beginFriendsScan,
-		failFriendsScan,
-		finishFriendsScan,
-		friendsScanStore,
-		recordFriendScanResult,
-		resetFriendsScan,
-		setFriendsScanFriendIds
-	} from '@/lib/stores/friends-scan';
+	import { friendsScanStore } from '@/lib/stores/friends-scan';
 	import { isActionableResult, isPascRecordPresent } from '@/lib/utils/status/status-utils';
 	import { STATUS } from '@/lib/types/constants';
 
@@ -42,9 +32,11 @@
 	// True only while the spinner is collapsing, right before the shield mounts.
 	let collapsing = $state(false);
 	const progress = new Tween(0, { duration: 600, easing: cubicOut });
-	let counts = new SvelteMap<ScanCategory, number>();
-	let providerDetail = $state<ScanProgressDetail | null>(null);
-	const scanBatch = createAbortableBatch();
+
+	// The scan itself lives in the shared manager, so a panel that mounts while
+	// another page is already scanning simply replays the current state.
+	const counts = $derived($friendsScanState.counts);
+	const providerDetail = $derived($friendsScanState.detail);
 
 	let open = $state(false);
 	let root = $state<HTMLElement | null>(null);
@@ -105,17 +97,75 @@
 		);
 	});
 
+	// Join (or take over) the shared scan for this user. The manager keeps the
+	// work alive across the friends page <-> profile navigation, so whichever
+	// page opens second sees the same progress instead of starting over.
 	$effect(() => {
-		void startScan();
-		return () => {
-			scanBatch.abort();
-			resetFriendsScan();
-		};
+		return joinFriendsScan(userId, isOwnFriends);
+	});
+
+	let progressInitialized = false;
+	$effect(() => {
+		const state = $friendsScanState;
+		if (state.userId !== userId) return;
+
+		if (!progressInitialized) {
+			progressInitialized = true;
+			void progress.set(state.percent, { duration: 0 });
+			return;
+		}
+		void progress.set(state.percent);
+	});
+
+	let phaseInitialized = false;
+	let collapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$effect(() => {
+		const state = $friendsScanState;
+		if (state.userId !== userId) return;
+
+		if (!phaseInitialized) {
+			phaseInitialized = true;
+			phase = state.phase;
+			return;
+		}
+
+		if (state.phase === 'scanning') {
+			if (collapseTimer !== null) {
+				clearTimeout(collapseTimer);
+				collapseTimer = null;
+			}
+			collapsing = false;
+			phase = 'scanning';
+			return;
+		}
+
+		if (state.phase === 'error') {
+			collapsing = false;
+			phase = 'error';
+			return;
+		}
+
+		// Already complete (joined a finished scan) or mid-animation: no spinner
+		// to collapse, so swap straight to the shield.
+		if (untrack(() => phase) !== 'scanning') {
+			phase = 'complete';
+			collapsing = false;
+			return;
+		}
+
+		collapsing = true;
+		collapseTimer = setTimeout(() => {
+			collapseTimer = null;
+			phase = 'complete';
+			collapsing = false;
+		}, ICON_COLLAPSE_MS);
 	});
 
 	$effect(() => {
 		return () => {
 			if (closeTimer !== null) clearTimeout(closeTimer);
+			if (collapseTimer !== null) clearTimeout(collapseTimer);
 		};
 	});
 
@@ -175,64 +225,6 @@
 		};
 	});
 
-	function applyCounts(next: ReadonlyMap<ScanCategory, number>) {
-		for (const [key, value] of next) counts.set(key, value);
-		for (const key of counts.keys()) {
-			if (!next.has(key)) counts.delete(key);
-		}
-	}
-
-	async function startScan() {
-		const signal = scanBatch.nextSignal();
-
-		phase = 'scanning';
-		collapsing = false;
-		void progress.set(0, { duration: 0 });
-		counts.clear();
-		providerDetail = null;
-		beginFriendsScan(userId);
-
-		try {
-			const result: ScanCounts = await scanFriendsForUser(
-				userId,
-				isOwnFriends,
-				(pct, detail) => {
-					void progress.set(pct);
-					if (!detail) return;
-					providerDetail = detail;
-					if (detail.counts) applyCounts(detail.counts);
-				},
-				signal,
-				{
-					onFriendIds: (ids) => setFriendsScanFriendIds(userId, ids),
-					onFriendResult: (friendId, category, _fromIntegration, combined) =>
-						recordFriendScanResult(userId, friendId, category, combined)
-				}
-			);
-			applyCounts(result);
-			finishFriendsScan(userId);
-			await progress.set(100);
-			if (signal.aborted) return;
-
-			// Let the spinner shrink away before swapping in the shield, so the two
-			// icons are never on screen at the same time.
-			collapsing = true;
-			await new Promise((resolve) => setTimeout(resolve, ICON_COLLAPSE_MS));
-			// Abort can happen while the collapse timer runs; TS narrowed the flag
-			// from the check above and would otherwise call this condition dead.
-			// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-			if (signal.aborted) return;
-			phase = 'complete';
-			collapsing = false;
-		} catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') return;
-			logger.error('Friends page scan failed', error);
-			failFriendsScan(userId);
-			collapsing = false;
-			phase = 'error';
-		}
-	}
-
 	function updatePanelPosition() {
 		if (!trigger || !panel) return;
 
@@ -282,6 +274,10 @@
 	function handleLeave() {
 		hovering = false;
 		scheduleClose();
+	}
+
+	function retry() {
+		restartFriendsScan(userId, isOwnFriends);
 	}
 
 	function shareOf(count: number): number {
@@ -386,7 +382,7 @@
 										width="14"
 									/>
 								{/if}
-								{`${String(p.resolved)}/${String(providerDetail?.total ?? 0)}`}
+								{`${String(p.resolved)}/${String(providerDetail.total)}`}
 							</span>
 						{/each}
 					</div>
@@ -394,11 +390,7 @@
 			{:else if phase === 'error'}
 				<div class="rotector-friends-scan-error" role="alert">
 					<span>{$_('scan_error_retry')}</span>
-					<button
-						class="rotector-friends-scan-retry"
-						onclick={() => void startScan()}
-						type="button"
-					>
+					<button class="rotector-friends-scan-retry" onclick={retry} type="button">
 						{$_('scan_error_retry_action')}
 					</button>
 				</div>

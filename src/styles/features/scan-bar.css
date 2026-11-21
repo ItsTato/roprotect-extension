@@ -19,8 +19,16 @@
 	line-height: normal;
 }
 
+/* Profile friends carousel header: an inline row that follows the heading, so
+   it needs its own leading space instead of stretching against a chip row. */
+@utility rotector-profile-friends-scan-host {
+	@apply inline-flex items-center self-baseline align-middle;
+	line-height: normal;
+	margin-inline-start: 0.5rem;
+}
+
 @utility rotector-friends-scan {
-	@apply relative inline-flex h-full items-center justify-center rounded-full align-middle;
+	@apply relative inline-flex items-center justify-center rounded-full align-middle block-full;
 	background-color: #292a32;
 	line-height: normal;
 	transition: background-color 0.15s ease;
@@ -34,7 +42,7 @@
    field wrapper, where there is no chip row to stretch against) at 32px.
    aspect-ratio makes the width track the height so the target stays 1:1. */
 @utility rotector-friends-scan-trigger {
-	@apply relative inline-flex aspect-square h-full min-h-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-xs font-medium;
+	@apply relative inline-flex aspect-square min-h-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-xs font-medium block-full;
 	color: #f7f7f8;
 	transition: color 0.15s ease;
 

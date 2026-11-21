@@ -211,6 +211,7 @@ export const COMPONENT_CLASSES = {
 	EXPORT_BUTTON: 'rotector-export-button',
 	SCAN_HOST: 'rotector-scan-host',
 	FRIENDS_SCAN_HOST: 'rotector-friends-scan-host',
+	PROFILE_FRIENDS_SCAN_HOST: 'rotector-profile-friends-scan-host',
 	FRIENDS_TAG_FILTERS_HOST: 'rotector-friends-tag-filters-host',
 	CIPHER_INDICATOR: 'rotector-cipher-indicator',
 	MEMBERSHIP_BADGE_PILL: 'rotector-membership-badge-pill'
@@ -259,5 +260,6 @@ export const STORAGE_KEYS = {
 	DEVELOPER_LOGS: 'developerLogs',
 	PERFORMANCE_ENTRIES: 'performanceEntries',
 	CONTENT_THEME: 'rotector-content-theme',
+	FRIENDS_SCAN_STATE: 'rotector-friends-scan-state',
 	METRICS_SNAPSHOTS: 'metricsSnapshots'
 } as const;
