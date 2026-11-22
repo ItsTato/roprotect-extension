@@ -1,18 +1,17 @@
-// Roblox's 2026 player-search redesign: circular avatar headshots in an
-// article-based grid. The old ul.search-result.avatar-cards markup is gone.
+// Roblox's 2026 player-search redesign renders circular avatar headshots in an
+// article-based grid. Keep the legacy card selectors during the rollout, since
+// Roblox still serves the old .avatar-cards markup to some cohorts.
 export const SEARCH_SELECTORS = {
-	CONTAINER: '.player-search-results-grid',
+	CONTAINER: 'ul.search-result.avatar-cards, .player-search-results-grid',
 	CARD: {
-		CONTAINER: 'article.player-search-card',
-		CAPTION: '.player-search-card-caption',
-		DISPLAY_NAME: '.player-search-card-name a',
-		USERNAME: '.player-search-card-caption > p',
-		AVATAR_IMG: '.player-search-avatar-clip img',
-		FULLBODY: '.player-search-avatar'
+		CONTAINER: 'li.player-item.avatar-card, article.player-search-card',
+		CAPTION: '.avatar-card-caption, .player-search-card-caption',
+		DISPLAY_NAME: '.avatar-name-container .avatar-name, .player-search-card-name a',
+		USERNAME: '.avatar-name-container + .avatar-card-label, .player-search-card-caption > p',
+		AVATAR_IMG: '.thumbnail-2d-container img, .player-search-avatar-clip img',
+		FULLBODY: '.avatar-card-fullbody, .player-search-avatar'
 	},
-	// New cards render Foundation buttons; keep the legacy classes for the
-	// pre-redesign layout during rollout.
-	FRIEND_BUTTON: '.player-search-action-parity, .btn-control-md, .mobile-card-btn',
+	FRIEND_BUTTON: '.btn-control-md, .mobile-card-btn, .player-search-action-parity',
 	NO_RESULTS: '.section-content-off.no-results',
-	PROFILE_LINK: '.player-search-profile-link'
+	PROFILE_LINK: 'a.avatar-card-link, .player-search-profile-link'
 } as const;
