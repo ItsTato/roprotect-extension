@@ -1,14 +1,18 @@
+// Roblox's 2026 player-search redesign: circular avatar headshots in an
+// article-based grid. The old ul.search-result.avatar-cards markup is gone.
 export const SEARCH_SELECTORS = {
-	CONTAINER: 'ul.search-result.avatar-cards',
+	CONTAINER: '.player-search-results-grid',
 	CARD: {
-		CONTAINER: 'li.player-item.avatar-card',
-		CAPTION: '.avatar-card-caption',
-		DISPLAY_NAME: '.avatar-name-container .avatar-name',
-		USERNAME: '.avatar-name-container + .avatar-card-label',
-		AVATAR_IMG: '.thumbnail-2d-container img',
-		FULLBODY: '.avatar-card-fullbody'
+		CONTAINER: 'article.player-search-card',
+		CAPTION: '.player-search-card-caption',
+		DISPLAY_NAME: '.player-search-card-name a',
+		USERNAME: '.player-search-card-caption > p',
+		AVATAR_IMG: '.player-search-avatar-clip img',
+		FULLBODY: '.player-search-avatar'
 	},
-	FRIEND_BUTTON: '.btn-control-md, .mobile-card-btn',
+	// New cards render Foundation buttons; keep the legacy classes for the
+	// pre-redesign layout during rollout.
+	FRIEND_BUTTON: '.player-search-action-parity, .btn-control-md, .mobile-card-btn',
 	NO_RESULTS: '.section-content-off.no-results',
-	PROFILE_LINK: 'a.avatar-card-link'
+	PROFILE_LINK: '.player-search-profile-link'
 } as const;
