@@ -124,6 +124,7 @@ export const API_ACTIONS = {
 	TRANSLATE_TEXT: 'translateText',
 	GET_GROUP_TRACKED_USERS: 'getGroupTrackedUsers',
 	LOOKUP_ROBLOX_USER_DISCORD: 'lookupRobloxUserDiscord',
+	LOOKUP_QUARRY: 'lookupQuarry',
 	EXPORT_GROUP_TRACKED_USERS: 'exportGroupTrackedUsers',
 	LOOKUP_OUTFITS_BY_NAME: 'lookupOutfitsByName',
 	LOOKUP_OUTFITS_BY_ID: 'lookupOutfitsById',
@@ -209,6 +210,9 @@ export const COMPONENT_CLASSES = {
 	GROUP_STATUS_CONTAINER: 'rotector-group-status-container',
 	EXPORT_BUTTON: 'rotector-export-button',
 	SCAN_HOST: 'rotector-scan-host',
+	FRIENDS_SCAN_HOST: 'rotector-friends-scan-host',
+	PROFILE_FRIENDS_SCAN_HOST: 'rotector-profile-friends-scan-host',
+	FRIENDS_TAG_FILTERS_HOST: 'rotector-friends-tag-filters-host',
 	CIPHER_INDICATOR: 'rotector-cipher-indicator',
 	MEMBERSHIP_BADGE_PILL: 'rotector-membership-badge-pill'
 } as const;
@@ -256,5 +260,6 @@ export const STORAGE_KEYS = {
 	DEVELOPER_LOGS: 'developerLogs',
 	PERFORMANCE_ENTRIES: 'performanceEntries',
 	CONTENT_THEME: 'rotector-content-theme',
+	FRIENDS_SCAN_STATE: 'rotector-friends-scan-state',
 	METRICS_SNAPSHOTS: 'metricsSnapshots'
 } as const;

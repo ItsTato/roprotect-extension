@@ -82,6 +82,14 @@
 			view = null;
 		};
 	});
+
+	// The plain textarea fallback has no CodeMirror updateListener, so the
+	// preview must track the bound value directly. updatePreview's token guard
+	// keeps a slower earlier render from overwriting the latest value.
+	$effect(() => {
+		if (!loadError) return;
+		updatePreview(value);
+	});
 </script>
 
 <div class="pasc-editor-layout">

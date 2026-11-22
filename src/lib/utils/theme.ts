@@ -54,11 +54,20 @@ class ThemeManager {
 
 	// Tracks the container and stamps data-theme so shadow-root portals follow theme changes
 	registerPortalContainer(container: HTMLElement): void {
+		// Overlay remounts create a fresh shadow host and leave the previous one detached.
+		// Drop stale entries here so the set cannot grow for the lifetime of the tab.
+		this.pruneDetachedPortalContainers();
 		this.portalContainers.add(container);
 
 		const currentTheme = this.getCurrentTheme();
 		container.dataset['theme'] = currentTheme;
 		logger.debug('Portal container registered for theme updates');
+	}
+
+	private pruneDetachedPortalContainers(): void {
+		for (const portal of this.portalContainers) {
+			if (!portal.isConnected) this.portalContainers.delete(portal);
+		}
 	}
 
 	async getContentScriptTheme(): Promise<'light' | 'dark' | null> {
@@ -105,6 +114,8 @@ class ThemeManager {
 			this.robloxObserver.disconnect();
 			this.robloxObserver = null;
 		}
+
+		this.portalContainers.clear();
 
 		logger.debug('Theme manager cleaned up');
 	}
