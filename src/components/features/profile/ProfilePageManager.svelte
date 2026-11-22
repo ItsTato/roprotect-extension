@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
 	import { mount, unmount } from 'svelte';
+	import { _ } from 'svelte-i18n';
+	import { showError } from '@/lib/stores/toast';
 	import { settings } from '@/lib/stores/settings';
 	import { logger } from '@/lib/utils/logging/logger';
 	import { waitForElement } from '@/lib/utils/dom/element-waiter';
@@ -34,7 +36,7 @@
 		setProfileTextBlurState,
 		observeProfileBlur
 	} from '@/lib/services/blur/profile';
-	import { isFlagged } from '@/lib/utils/status/status-utils';
+	import { isFlagged, withUpdatedProviderData } from '@/lib/utils/status/status-utils';
 	import { getRotectorMembershipBadge } from '@/lib/utils/status/status-projection';
 	import { detectEncoding } from '@/lib/services/cipher/encoding-detector';
 	import { getLoggedInUserId } from '@/lib/utils/client-id';
@@ -47,7 +49,7 @@
 	import type { QueueModalManagerInstance } from '../queue/queue-modal-manager';
 	import UserListManager from '../lists/UserListManager.svelte';
 	import GroupListManager from '../groups/GroupListManager.svelte';
-	import FriendsScanBar from '../friends/FriendsScanBar.svelte';
+	import FriendsScanPanel from '../friends/FriendsScanPanel.svelte';
 	import GroupsScanBar from '../groups/GroupsScanBar.svelte';
 	import CipherIndicator from '../cipher/CipherIndicator.svelte';
 
@@ -84,7 +86,7 @@
 	let blurObserverCleanup: (() => void) | null = null;
 	let nameObserverCleanup: (() => void) | null = null;
 	let cipherContainer: HTMLElement | null = null;
-	let friendsScanBarCleanup: (() => void) | null = null;
+	let friendsScanPanelCleanup: (() => void) | null = null;
 	let groupsScanBarCleanup: (() => void) | null = null;
 	// Async setup continues across `await` points; once the controller tears the
 	// manager down, a late continuation must not mount components into a detached tree.
@@ -144,7 +146,7 @@
 		setupFriendWarning();
 
 		await Promise.all([
-			setupCarousel().then(setupFriendsScanBar),
+			setupCarousel().then(setupFriendsScanPanel),
 			setupGroupsShowcase().then(setupGroupsScanBar),
 			setupCipherIndicator()
 		]);
@@ -227,7 +229,12 @@
 				container = document.createElement('div');
 				container.className = COMPONENT_CLASSES.PROFILE_STATUS;
 				container.dataset['rotectorOwned'] = 'true';
+			}
 
+			// Roblox renders the verified/premium/Roblox Plus icon group as a sibling
+			// after the title span. Keep our indicator after those icons instead of
+			// letting React re-render reorder the title row around it.
+			if (titleContainer.lastElementChild !== container) {
 				titleContainer.append(container);
 			}
 
@@ -267,9 +274,13 @@
 					suppressMembershipBadge: true,
 					onClick: handleStatusClick,
 					onQueue: handleQueueUser,
-					// A PASC save/refresh changes the authoritative verdict; refetch so
-					// the profile warning and blur state follow it.
-					onStatusUpdate: () => querySubscription.refresh()
+					// A PASC save/refresh changes the authoritative verdict. Merge the
+					// returned record instead of refetching every provider (which blanked
+					// the tab and could regress the verdict on a transient failure).
+					onStatusUpdate: (status: UserStatus) => {
+						if (!userStatus) return;
+						userStatus = withUpdatedProviderData(userStatus, 'system-pasc', status);
+					}
 				}
 			});
 		} catch (error) {
@@ -423,7 +434,7 @@
 		}
 	}
 
-	async function setupFriendsScanBar() {
+	async function setupFriendsScanPanel() {
 		if (!showCarousel) return;
 		if (!get(settings)[SETTINGS_KEYS.FRIENDS_CHECK_ENABLED]) return;
 		const isOwnProfile = userId === getLoggedInUserId();
@@ -437,20 +448,20 @@
 			if (!heading) return;
 
 			const container = document.createElement('span');
-			container.className = COMPONENT_CLASSES.SCAN_HOST;
+			container.className = COMPONENT_CLASSES.PROFILE_FRIENDS_SCAN_HOST;
 			heading.after(container);
 
-			const component = mount(FriendsScanBar, {
+			const component = mount(FriendsScanPanel, {
 				target: container,
 				props: { userId, isOwnFriends: userId === getLoggedInUserId() }
 			});
 
-			friendsScanBarCleanup = () => {
+			friendsScanPanelCleanup = () => {
 				void unmount(component);
 				container.remove();
 			};
 		} catch (error) {
-			logger.error('Failed to setup friends scan bar:', error);
+			logger.error('Failed to setup friends scan panel:', error);
 		}
 	}
 
@@ -558,6 +569,15 @@
 			}
 			return true;
 		}
+
+		// Roblox may re-render the icon group into the title row. Move the indicator
+		// back after the icons without rebuilding the whole component.
+		const titleRow = containerInActiveHeader.parentElement;
+		if (titleRow && titleRow.lastElementChild !== containerInActiveHeader) {
+			titleRow.append(containerInActiveHeader);
+			return true;
+		}
+
 		return false;
 	}
 
@@ -622,13 +642,14 @@
 
 	async function handleFriendBlock() {
 		logger.userAction(USER_ACTIONS.FRIEND_BLOCK, { userId });
-		friendWarningOpen = false;
 
 		try {
 			await blockUser(userId);
+			friendWarningOpen = false;
 			globalThis.location.reload();
 		} catch (error) {
 			logger.error('Failed to block user:', error);
+			showError($_('friend_warning_block_failed'));
 		}
 	}
 
@@ -648,8 +669,8 @@
 		if (cipherComponent) void unmount(cipherComponent);
 		unmountMembershipPill();
 
-		friendsScanBarCleanup?.();
-		friendsScanBarCleanup = null;
+		friendsScanPanelCleanup?.();
+		friendsScanPanelCleanup = null;
 		groupsScanBarCleanup?.();
 		groupsScanBarCleanup = null;
 

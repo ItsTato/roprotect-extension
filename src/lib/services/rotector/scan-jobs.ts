@@ -3,32 +3,21 @@ import { fetchAllUserGroupIds } from '../roblox/groups';
 import { groupStatusService } from './entity-status';
 import { queryMultipleUsers, getEnabledCustomApis } from './unified-query';
 import { getAssetUrl } from '../../utils/assets';
+import type { CustomApiConfig, CombinedStatus } from '../../types/custom-api';
 import type { UserStatus } from '../../types/api';
-import type { CombinedStatus, CustomApiResult, CustomApiConfig } from '../../types/custom-api';
-import { LOOKUP_CONTEXT, STATUS } from '../../types/constants';
+import { LOOKUP_CONTEXT } from '../../types/constants';
 import {
-	calculateStatusBadges,
-	pickHighestSeverityCustomFlag,
-	pickHighestSeveritySystemResult
-} from '../../utils/status/status-utils';
+	combinedResultToCategory,
+	flagToCategory,
+	type ScanCategory,
+	type ScanCounts
+} from '../../utils/status/scan-category';
+
+export type { ScanCategory, ScanCounts } from '../../utils/status/scan-category';
 
 const SCAN_PHASE_CHECK_START = 30;
 const SCAN_PHASE_CHECK_RANGE = 70;
 const FRIEND_SCAN_PROGRESS_MAX = 95;
-
-export type ScanCategory =
-	| 'unsafe'
-	| 'redacted'
-	| 'mixed'
-	| 'pending'
-	| 'past'
-	| 'provisional'
-	| 'queued'
-	| 'outfit'
-	| 'integration'
-	| 'unknown'
-	| 'safe';
-export type ScanCounts = Map<ScanCategory, number>;
 
 // Per-provider resolution counts surfaced alongside the percentage so the bar
 // can show e.g. "(65/248 SIGMANET, 80/248 RAB, 20/248 TASE)".
@@ -43,9 +32,43 @@ export interface ScanProviderProgress {
 export interface ScanProgressDetail {
 	total: number;
 	providers: ScanProviderProgress[];
+	// Live tag counts for the entities resolved so far, so the scan overview can
+	// fill in tag types while the search is still running instead of staying
+	// empty until the whole batch finishes.
+	counts?: ScanCounts;
 }
 
 export type ScanProgressCallback = (pct: number, detail?: ScanProgressDetail) => void;
+
+// Optional observer used by the friends-page tag filters. The scan already
+// queries every friend, so the filters reuse those results instead of issuing
+// a second full lookup just to know which tags are present.
+export interface FriendScanHooks {
+	onFriendIds?: (friendIds: string[]) => void;
+	onFriendResult?: (
+		friendId: string,
+		category: ScanCategory | null,
+		fromIntegration: boolean,
+		combined: CombinedStatus<UserStatus>
+	) => void;
+	// Fires once per friend after every enabled provider has answered, so a
+	// resumed scan knows which friends never need to be queried again.
+	onFriendComplete?: (friendId: string, combined: CombinedStatus<UserStatus>) => void;
+}
+
+// Progress restored from a previous page/context. Only fully-resolved friends
+// are replayed; partially-resolved ones are queried again so a later provider
+// answer can still move them into a different bucket.
+export interface FriendScanResumeEntry {
+	category: ScanCategory | null;
+	fromIntegration: boolean;
+	combined: CombinedStatus<UserStatus>;
+}
+
+export interface FriendScanResume {
+	friendIds: readonly string[];
+	results: ReadonlyMap<string, FriendScanResumeEntry>;
+}
 
 // Dedicated readout-only logos for the scan progress chips. These deliberately
 // differ from the provider's landscapeImageDataUrl (used by tooltip tabs etc):
@@ -87,108 +110,53 @@ function buildZeroedDetail(total: number): ScanProgressDetail {
 	return { total, providers };
 }
 
-function flagToCategory(flagType: number): ScanCategory {
-	switch (flagType) {
-		case STATUS.FLAGS.PENDING: {
-			return 'pending';
-		}
-		case STATUS.FLAGS.UNSAFE: {
-			return 'unsafe';
-		}
-		case STATUS.FLAGS.REDACTED: {
-			return 'redacted';
-		}
-		case STATUS.FLAGS.MIXED: {
-			return 'mixed';
-		}
-		case STATUS.FLAGS.PAST_OFFENDER: {
-			return 'past';
-		}
-		case STATUS.FLAGS.PROVISIONAL: {
-			return 'provisional';
-		}
-		case STATUS.FLAGS.QUEUED: {
-			return 'queued';
-		}
-		case STATUS.FLAGS.SAFE: {
-			return 'safe';
-		}
-		default: {
-			return 'unknown';
-		}
-	}
-}
-
-// One bucket per friend, plus whether a custom API was among the sources that flagged them
-interface ScanBucket {
-	category: ScanCategory | null;
-	fromIntegration: boolean;
-}
-
-// The system provider whose verdict represents the friend: the most severe one across
-// SIGMANET/RAB/TASE, so a clean service cannot mask a detection from a sibling one.
-function getSystemApiResult(
-	combined: CombinedStatus<UserStatus>
-): Pick<CustomApiResult<UserStatus>, 'data' | 'error' | 'loading'> | null {
-	const worst = pickHighestSeveritySystemResult(combined);
-	if (!worst) return null;
-	const result = worst[1];
-	return { data: result.data, error: result.error, loading: result.loading };
-}
-
-// Picks one bucket per friend, applying outfit/queued overrides. Custom APIs are bucketed by the
-// severity they actually reported instead of a single catch-all, but a non-flagged system API
-// verdict never masks a partner's detection.
-function combinedResultToCategory(combined: CombinedStatus<UserStatus>): ScanBucket {
-	const systemResult = getSystemApiResult(combined);
-	const data = systemResult?.data;
-	const customFlagType = pickHighestSeverityCustomFlag(combined);
-	const customCategory = customFlagType === null ? null : flagToCategory(customFlagType);
-	const fromIntegration = customCategory !== null;
-
-	// System APIs unreachable: still surface custom-API detections rather than dropping the entity,
-	// which would both hide the only available signal and shrink the scan total.
-	if (!data) {
-		return { category: customCategory, fromIntegration };
-	}
-
-	if (calculateStatusBadges(data).isOutfitOnly && customCategory === null) {
-		return { category: 'outfit', fromIntegration };
-	}
-
-	const isProcessedQueue = data.flagType === STATUS.FLAGS.QUEUED && data.processed === true;
-	const category = isProcessedQueue ? 'safe' : flagToCategory(data.flagType);
-
-	// 'safe' and 'outfit' are both non-flagged verdicts, so a partner's detection outranks them
-	// and inherits the severity it reported
-	if (customCategory !== null && (category === 'safe' || category === 'outfit')) {
-		return { category: customCategory, fromIntegration };
-	}
-
-	return { category, fromIntegration };
-}
-
 function increment(counts: ScanCounts, category: ScanCategory): void {
 	counts.set(category, (counts.get(category) ?? 0) + 1);
+}
+
+function decrement(counts: ScanCounts, category: ScanCategory): void {
+	const next = (counts.get(category) ?? 0) - 1;
+	if (next > 0) {
+		counts.set(category, next);
+	} else {
+		counts.delete(category);
+	}
 }
 
 export async function scanFriendsForUser(
 	userId: string,
 	isOwnFriends: boolean,
 	onProgress: ScanProgressCallback,
-	signal: AbortSignal
+	signal: AbortSignal,
+	hooks?: FriendScanHooks,
+	resume?: FriendScanResume
 ): Promise<ScanCounts> {
 	const counts: ScanCounts = new Map();
 
-	const friendIds = await fetchAllFriendIds(
-		userId,
-		(fetched) => {
-			onProgress(Math.min(fetched * 0.15, SCAN_PHASE_CHECK_START), buildZeroedDetail(fetched));
-		},
-		signal
-	);
+	// A resumed run already knows the friend list, so it skips the paginated
+	// Roblox fetch and only queries the friends a previous context had not
+	// finished. Without a usable resume payload, behave like a fresh scan.
+	const resumed = resume && resume.friendIds.length > 0 ? resume : null;
+	let friendIds: string[];
+	if (resumed) {
+		friendIds = [...resumed.friendIds];
+	} else {
+		const fetched = await fetchAllFriendIds(
+			userId,
+			(fetchedCount) => {
+				onProgress(
+					Math.min(fetchedCount * 0.15, SCAN_PHASE_CHECK_START),
+					buildZeroedDetail(fetchedCount)
+				);
+			},
+			signal
+		);
+		friendIds = fetched.map((id) => id.toString());
+	}
 
 	if (friendIds.length === 0) return counts;
+
+	hooks?.onFriendIds?.(friendIds);
 
 	onProgress(SCAN_PHASE_CHECK_START, buildZeroedDetail(friendIds.length));
 
@@ -196,56 +164,112 @@ export async function scanFriendsForUser(
 	const completed = new Set<string>();
 	const total = friendIds.length;
 
-	const results = await queryMultipleUsers(
-		friendIds.map((id) => id.toString()),
-		{
-			lookupContext,
-			signal,
-			onUpdate: (friendId, combined, providers) => {
-				// Completion tracks every enabled API the user can actually access —
-				// system providers plus custom ones — so a friend counts once all of
-				// *their* sources have answered, whichever those are.
-				const enabledIds: string[] = getEnabledCustomApis().map((api: CustomApiConfig) => api.id);
-				if (enabledIds.length === 0) return; // no APIs configured at all
+	// Live tally of the buckets each friend currently falls into. A provider
+	// answering can move a friend between buckets (e.g. safe → unsafe), so keep
+	// the last bucket per friend and apply the difference instead of re-counting
+	// the whole batch on every update.
+	const liveCounts: ScanCounts = new Map();
+	const liveBuckets = new Map<
+		string,
+		{ category: ScanCategory | null; fromIntegration: boolean }
+	>();
 
-				const allResolved = enabledIds.every((id: string) => {
-					const result = combined.get(id);
-					return result && !result.loading;
-				});
-				if (allResolved && !completed.has(friendId)) {
-					completed.add(friendId);
-				}
-
-				// Advance on ANY provider's answers, not just fully-resolved friends:
-				// holding the bar until the slowest provider finishes its first chunk
-				// is what pinned it at 30%. System and custom providers both report
-				// per-provider counts; the per-friend fallback is only a safety net.
-				if (providers.length === 0) {
-					const pct = SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
-					onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX));
-					return;
-				}
-				const resolvedSum = providers.reduce((sum, p) => sum + p.resolved, 0);
-				const pct =
-					SCAN_PHASE_CHECK_START +
-					(resolvedSum / (total * providers.length)) * SCAN_PHASE_CHECK_RANGE;
-				const detail: ScanProgressDetail = {
-					total,
-					providers: sortProviders(providers).map((p) => ({
-						apiId: p.apiId,
-						apiName: p.apiName,
-						logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
-						fallbackLogoUrl: p.logoUrl,
-						resolved: p.resolved
-					}))
-				};
-				onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), detail);
-			}
+	const trackBucket = (
+		friendId: string,
+		category: ScanCategory | null,
+		fromIntegration: boolean
+	) => {
+		const previous = liveBuckets.get(friendId);
+		if (previous?.category === category && previous.fromIntegration === fromIntegration) {
+			return;
 		}
-	);
+		if (previous?.category) decrement(liveCounts, previous.category);
+		if (previous?.fromIntegration) decrement(liveCounts, 'integration');
+		if (category) increment(liveCounts, category);
+		if (fromIntegration) increment(liveCounts, 'integration');
+		liveBuckets.set(friendId, { category, fromIntegration });
+	};
 
-	for (const combined of results.values()) {
+	// Seed the live tally from friends an earlier context already finished, so
+	// the summary reflects the whole list and progress starts where it left off.
+	if (resumed) {
+		for (const [friendId, entry] of resumed.results) {
+			completed.add(friendId);
+			trackBucket(friendId, entry.category, entry.fromIntegration);
+			if (entry.category) increment(counts, entry.category);
+			if (entry.fromIntegration) increment(counts, 'integration');
+		}
+	}
+
+	const pendingIds = friendIds.filter((id) => !completed.has(id));
+
+	const snapshotCounts = (): ScanCounts => new Map(liveCounts);
+
+	const results =
+		pendingIds.length === 0
+			? new Map<string, CombinedStatus<UserStatus>>()
+			: await queryMultipleUsers(pendingIds, {
+					lookupContext,
+					signal,
+					onUpdate: (friendId, combined, providers) => {
+						const bucket = combinedResultToCategory(combined);
+						trackBucket(friendId, bucket.category, bucket.fromIntegration);
+						hooks?.onFriendResult?.(friendId, bucket.category, bucket.fromIntegration, combined);
+						const live = snapshotCounts();
+
+						// Completion tracks every enabled API the user can actually access —
+						// system providers plus custom ones — so a friend counts once all of
+						// *their* sources have answered, whichever those are.
+						const enabledIds: string[] = getEnabledCustomApis().map(
+							(api: CustomApiConfig) => api.id
+						);
+						if (enabledIds.length === 0) return; // no APIs configured at all
+
+						const allResolved = enabledIds.every((id: string) => {
+							const result = combined.get(id);
+							return result && !result.loading;
+						});
+						if (allResolved && !completed.has(friendId)) {
+							completed.add(friendId);
+							hooks?.onFriendComplete?.(friendId, combined);
+						}
+
+						// Advance on ANY provider's answers, not just fully-resolved friends:
+						// holding the bar until the slowest provider finishes its first chunk
+						// is what pinned it at 30%. System and custom providers both report
+						// per-provider counts; the per-friend fallback is only a safety net.
+						if (resumed || providers.length === 0) {
+							const pct =
+								SCAN_PHASE_CHECK_START + (completed.size / total) * SCAN_PHASE_CHECK_RANGE;
+							onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), {
+								total,
+								providers: [],
+								counts: live
+							});
+							return;
+						}
+						const resolvedSum = providers.reduce((sum, p) => sum + p.resolved, 0);
+						const pct =
+							SCAN_PHASE_CHECK_START +
+							(resolvedSum / (total * providers.length)) * SCAN_PHASE_CHECK_RANGE;
+						const detail: ScanProgressDetail = {
+							total,
+							counts: live,
+							providers: sortProviders(providers).map((p) => ({
+								apiId: p.apiId,
+								apiName: p.apiName,
+								logoUrl: SCAN_PROVIDER_LOGO_OVERRIDES[p.apiId] ?? p.logoUrl,
+								fallbackLogoUrl: p.logoUrl,
+								resolved: p.resolved
+							}))
+						};
+						onProgress(Math.min(pct, FRIEND_SCAN_PROGRESS_MAX), detail);
+					}
+				});
+
+	for (const [friendId, combined] of results.entries()) {
 		const { category, fromIntegration } = combinedResultToCategory(combined);
+		hooks?.onFriendResult?.(friendId, category, fromIntegration, combined);
 		if (category) increment(counts, category);
 		// Overlaps the severity buckets above, so the scan bar keeps it out of its total
 		if (fromIntegration) increment(counts, 'integration');
