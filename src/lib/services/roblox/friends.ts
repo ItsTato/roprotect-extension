@@ -9,6 +9,7 @@ export async function fetchAllFriendIds(
 	signal?: AbortSignal
 ): Promise<number[]> {
 	const allIds: number[] = [];
+	const seenCursors = new Set<string>();
 	let cursor: string | null = null;
 
 	for (;;) {
@@ -48,6 +49,11 @@ export async function fetchAllFriendIds(
 		onProgress?.(allIds.length);
 
 		if (!cursor) break;
+
+		// Guard against a backend that echoes the same cursor: without this the loop
+		// would append the same page forever.
+		if (seenCursors.has(cursor)) break;
+		seenCursors.add(cursor);
 	}
 
 	return allIds;

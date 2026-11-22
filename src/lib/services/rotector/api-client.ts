@@ -226,6 +226,10 @@ class RotectorApiClient {
 		});
 	}
 
+	async lookupQuarry(ids: string[]): Promise<Record<string, string[] | null>> {
+		return sendMessage<Record<string, string[] | null>>(API_ACTIONS.LOOKUP_QUARRY, { ids });
+	}
+
 	async lookupOutfitsByName(
 		userId: string | number,
 		names: string[]
@@ -337,15 +341,14 @@ class RotectorApiClient {
 		});
 	}
 
-	async whoami(apiKey: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
+	async whoami(apiKey: string): Promise<ApiResponse> {
 		logger.debug('[apiClient] whoami called', {
 			apiKeyPrefix: `${apiKey.slice(0, 8)}...`,
 			apiKeyLength: apiKey.length
 		});
-		const result = await sendMessage<{ success: boolean; data?: unknown; error?: string }>(
-			API_ACTIONS.API_WHOAMI,
-			{ apiKey }
-		);
+		// The background answers with a bare envelope (no outer data wrapper), so the
+		// failure keeps its HTTP status/code instead of collapsing to a bare message.
+		const result = await sendMessage<ApiResponse>(API_ACTIONS.API_WHOAMI, { apiKey });
 		logger.debug('[apiClient] whoami response', {
 			success: result.success,
 			hasError: !!result.error,

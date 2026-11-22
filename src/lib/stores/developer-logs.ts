@@ -9,7 +9,8 @@ const {
 	add
 } = createPersistentListStore<LogEntry>({
 	storageKey: STORAGE_KEYS.DEVELOPER_LOGS,
-	maxEntries: 1000
+	maxEntries: 1000,
+	silentFailures: true
 });
 
 export { developerLogs, loadDeveloperLogs };

@@ -1,5 +1,5 @@
 import { API_ACTIONS } from '@/lib/types/constants';
-import type { MembershipBadgeUpdatePayload, PascRecordUpsert } from '@/lib/types/api';
+import type { MembershipBadgeUpdatePayload } from '@/lib/types/api';
 import type { ContentMessage } from '@/lib/schemas/content-message';
 import {
 	getUnprocessedUserIdsFromStorage,
@@ -34,6 +34,7 @@ import {
 	uploadPascFile,
 	upsertPascRecord
 } from './endpoints/pasc';
+import { lookupQuarry } from './endpoints/quarry';
 import { exportGroupTrackedUsers } from './endpoints/export';
 import { translateTexts } from './endpoints/translate';
 import { getApiUsage } from './endpoints/usage';
@@ -122,6 +123,9 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 		case API_ACTIONS.LOOKUP_ROBLOX_USER_DISCORD: {
 			return lookupRobloxUserDiscord(msg.userId, msg.clientId ?? undefined);
 		}
+		case API_ACTIONS.LOOKUP_QUARRY: {
+			return lookupQuarry(msg.ids);
+		}
 		case API_ACTIONS.LOOKUP_OUTFITS_BY_NAME: {
 			return lookupOutfitsByName(msg.userId, msg.names, msg.clientId ?? undefined);
 		}
@@ -170,11 +174,7 @@ export async function dispatchContentMessage(msg: ContentMessage): Promise<unkno
 			return getPascClearance(msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.PASC_UPSERT_RECORD: {
-			return upsertPascRecord(
-				msg.userId,
-				msg.record as unknown as PascRecordUpsert,
-				msg.clientId ?? undefined
-			);
+			return upsertPascRecord(msg.userId, msg.record, msg.clientId ?? undefined);
 		}
 		case API_ACTIONS.PASC_UPLOAD_FILE: {
 			return uploadPascFile(
